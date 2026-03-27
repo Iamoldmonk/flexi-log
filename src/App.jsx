@@ -2,7 +2,7 @@ import { useState } from "react";
 import FlexiLogAdmin from "./FlexiLogAdmin";
 import StaffView from "./StaffView";
 import SubmittedLogs from "./SubmittedLogs";
-import { useTemplates, useLogs, useRoles } from "./useFirestore";
+import { useTemplates, useLogs, useRoles, useOutlets } from "./useFirestore";
 
 const ADMIN_PASSWORD = "admin123";
 const STAFF_PASSWORD = "staff123";
@@ -53,6 +53,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [staffName, setStaffName] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
+  const [selectedOutlet, setSelectedOutlet] = useState("");
   const [rolePassword, setRolePassword] = useState("");
   const [error, setError] = useState("");
   const [staffTab, setStaffTab] = useState("checklist"); // 'checklist' | 'logs'
@@ -60,6 +61,7 @@ export default function App() {
   const [templates, setTemplates, templatesLoading] = useTemplates();
   const [logs, addLog, logsLoading] = useLogs();
   const [roles] = useRoles();
+  const [outlets] = useOutlets();
 
   const login = () => {
     if (loginAs === "admin" && password === ADMIN_PASSWORD) {
@@ -78,6 +80,12 @@ export default function App() {
         setError("Incorrect role or password.");
         return;
       }
+      // Outlet selection required only if role has outlets assigned
+      const roleOutlets = matchedRole.assignedOutlets || [];
+      if (roleOutlets.length > 0 && !selectedOutlet) {
+        setError("Please select an outlet.");
+        return;
+      }
       setRole(matchedRole); // Store role object with checklists
       setError("");
     } else {
@@ -92,6 +100,7 @@ export default function App() {
     setPassword("");
     setStaffName("");
     setSelectedRole("");
+    setSelectedOutlet("");
     setRolePassword("");
     setError("");
   };
@@ -140,7 +149,7 @@ export default function App() {
               onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
 
             <label style={S.label}>Select Role</label>
-            <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
+            <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); setSelectedOutlet(""); }}
               style={S.input}
               onFocus={e => e.target.style.borderColor = "#000"}
               onBlur={e => e.target.style.borderColor = "#E8E8E8"}>
@@ -149,6 +158,28 @@ export default function App() {
                 <option key={r._docId} value={r._docId}>{r.name}</option>
               ))}
             </select>
+
+            {/* Show outlet dropdown only if selected role has outlets */}
+            {(() => {
+              const currentRole = roles?.find(r => r._docId === selectedRole);
+              const roleOutlets = currentRole?.assignedOutlets || [];
+              const availableOutlets = outlets?.filter(o => roleOutlets.includes(o._docId)) || [];
+              if (availableOutlets.length === 0) return null;
+              return (
+                <>
+                  <label style={S.label}>Select Outlet</label>
+                  <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)}
+                    style={S.input}
+                    onFocus={e => e.target.style.borderColor = "#000"}
+                    onBlur={e => e.target.style.borderColor = "#E8E8E8"}>
+                    <option value="">-- Choose an outlet --</option>
+                    {availableOutlets.map(o => (
+                      <option key={o._docId} value={o._docId}>{o.name}</option>
+                    ))}
+                  </select>
+                </>
+              );
+            })()}
 
             <label style={S.label}>Role Password</label>
             <input type="password" value={rolePassword} onChange={e => setRolePassword(e.target.value)}
@@ -162,9 +193,11 @@ export default function App() {
 
         <button onClick={login} style={S.btn(true)}>Sign In</button>
 
-        <div style={{ textAlign: "center", marginTop: 18, fontSize: 11, color: "#ccc" }}>
-          {loginAs === "admin" ? "Demo: admin = admin123" : "Create a role in Admin panel"}
-        </div>
+        {loginAs === "staff" && (
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 11, color: "#ccc" }}>
+            Select your role and enter the password provided by admin
+          </div>
+        )}
       </div>
     </div>
   );
@@ -183,13 +216,16 @@ export default function App() {
     ? templates?.filter(t => role.assignedChecklists.includes(t._docId))
     : [];
 
-  // Wrap addLog to include staff details
+  // Wrap addLog to include staff details + outlet
+  const matchedOutlet = outlets?.find(o => o._docId === selectedOutlet);
   const addLogWithStaff = (log) => {
     return addLog({
       ...log,
       staffName: staffName,
       roleId: role._docId,
       roleName: role.name,
+      outletId: selectedOutlet || null,
+      outletName: matchedOutlet?.name || null,
     });
   };
 
