@@ -457,7 +457,17 @@ function SubmittedLogsView({ logs }) {
                   <div key={f.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #F8F8F8" }}>
                     <div style={{ fontSize: 11, color: "#aaa", marginBottom: 3 }}>{f.label}</div>
                     {f.type === "toggle" && <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: val === "yes" ? "#2d9e2d18" : "#F5F5F5", color: val === "yes" ? "#2d9e2d" : "#999" }}>{val === "yes" ? f.yesLabel || "Done" : val === "no" ? f.noLabel || "Skip" : "—"}</span>}
-                    {(f.type === "text" || f.type === "number") && <div style={{ fontSize: 13, color: val ? "#1a1a1a" : "#ccc" }}>{val ? `${val}${f.unit ? " " + f.unit : ""}` : "—"}</div>}
+                    {f.type === "text" && <div style={{ fontSize: 13, color: val ? "#1a1a1a" : "#ccc" }}>{val ? `${val}${f.unit ? " " + f.unit : ""}` : "—"}</div>}
+                    {f.type === "number" && (
+                      <div>
+                        <div style={{ fontSize: 13, color: val ? "#1a1a1a" : "#ccc" }}>{val ? `${val}${f.unit ? " " + f.unit : ""}` : "—"}</div>
+                        {f.trackWaste && log.values[f.id + "_waste"] > 0 && (
+                          <div style={{ fontSize: 12, color: "#e67e22", marginTop: 3 }}>
+                            Wastage: {log.values[f.id + "_waste"]}{f.unit ? " " + f.unit : ""}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {f.type === "rating" && <div style={{ display: "flex", gap: 2 }}>{Array.from({ length: f.maxStars || 5 }).map((_, i) => <span key={i} style={{ fontSize: 14, color: i < (val || 0) ? "#f4a825" : "#E8E8E8" }}>★</span>)}</div>}
                     {f.type === "dropdown" && <div style={{ fontSize: 13, color: val ? "#1a1a1a" : "#ccc" }}>{val || "—"}</div>}
                     {f.type === "signature" && <div style={{ fontSize: 12, color: val ? "#2d9e2d" : "#ccc" }}>{val ? "✓ Signed" : "—"}</div>}
