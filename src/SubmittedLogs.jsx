@@ -12,7 +12,11 @@ function LogCard({ log, onExpand, expanded }) {
       <div onClick={onExpand} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a" }}>{log.templateName}</div>
-          <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>Submitted {log.submittedAt}</div>
+          <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>
+            Submitted {log.submittedAt}
+            {log.staffName && <span style={{ marginLeft: 8 }}>• {log.staffName}</span>}
+            {log.roleName && <span style={{ marginLeft: 4 }}>({log.roleName})</span>}
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ background: "#2d9e2d18", border: "1.5px solid #2d9e2d35", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#2d9e2d" }}>✓ Submitted</div>
@@ -88,10 +92,15 @@ function LogCard({ log, onExpand, expanded }) {
   );
 }
 
-export default function SubmittedLogs({ logs }) {
+export default function SubmittedLogs({ logs, staffName, roleName }) {
   const [expandedId, setExpandedId] = useState(null);
 
-  if (logs.length === 0) return (
+  // Filter logs by staff member if staffName is provided (for staff view)
+  const filteredLogs = staffName && staffName.trim()
+    ? logs.filter(log => log.staffName === staffName)
+    : logs;
+
+  if (filteredLogs.length === 0) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 52px)", color: "#bbb" }}>
       <div style={{ fontSize: 36, marginBottom: 12 }}>📁</div>
       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No logs yet</div>
@@ -102,12 +111,15 @@ export default function SubmittedLogs({ logs }) {
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "22px 16px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>SUBMITTED LOGS — {logs.length}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>
+          SUBMITTED LOGS — {filteredLogs.length}
+          {staffName && roleName && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#999" }}>({roleName})</span>}
+        </span>
       </div>
-      {logs.map(log => (
-        <LogCard key={log.id} log={log}
-          expanded={expandedId === log.id}
-          onExpand={() => setExpandedId(expandedId === log.id ? null : log.id)} />
+      {filteredLogs.map(log => (
+        <LogCard key={log._docId || log.id} log={log}
+          expanded={expandedId === (log._docId || log.id)}
+          onExpand={() => setExpandedId(expandedId === (log._docId || log.id) ? null : (log._docId || log.id))} />
       ))}
     </div>
   );
