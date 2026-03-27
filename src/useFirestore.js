@@ -87,3 +87,39 @@ export function useLogs() {
 
   return [logs, addLog, loading];
 }
+
+/**
+ * Real-time sync for roles collection.
+ * Returns [roles, saveRole, deleteRole, loading]
+ */
+export function useRoles() {
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "roles"), (snap) => {
+      const docs = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
+      setRoles(docs);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const saveRole = useCallback(async (role) => {
+    const { _docId, ...data } = role;
+    if (_docId) {
+      await setDoc(doc(db, "roles", _docId), data, { merge: true });
+    } else {
+      await addDoc(collection(db, "roles"), {
+        ...data,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }, []);
+
+  const removeRole = useCallback(async (docId) => {
+    await deleteDoc(doc(db, "roles", docId));
+  }, []);
+
+  return [roles, saveRole, removeRole, loading];
+}
