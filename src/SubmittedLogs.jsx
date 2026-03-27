@@ -14,8 +14,7 @@ function LogCard({ log, onExpand, expanded }) {
           <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a" }}>{log.templateName}</div>
           <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>
             Submitted {log.submittedAt}
-            {log.staffName && <span style={{ marginLeft: 8 }}>• {log.staffName}</span>}
-            {log.roleName && <span style={{ marginLeft: 4 }}>({log.roleName})</span>}
+            {log.roleName && <span style={{ marginLeft: 8 }}>• {log.roleName}</span>}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -92,13 +91,11 @@ function LogCard({ log, onExpand, expanded }) {
   );
 }
 
-export default function SubmittedLogs({ logs, staffName, roleName }) {
+export default function SubmittedLogs({ logs, roleName }) {
   const [expandedId, setExpandedId] = useState(null);
 
-  // Filter logs by staff member if staffName is provided (for staff view)
-  const filteredLogs = staffName && staffName.trim()
-    ? logs.filter(log => log.staffName === staffName)
-    : logs;
+  // Use all logs (no staff name filtering)
+  const filteredLogs = logs;
 
   if (filteredLogs.length === 0) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 52px)", color: "#bbb" }}>
@@ -113,7 +110,7 @@ export default function SubmittedLogs({ logs, staffName, roleName }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>
           SUBMITTED LOGS — {filteredLogs.length}
-          {staffName && roleName && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#999" }}>({roleName})</span>}
+          {roleName && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#999" }}>({roleName})</span>}
         </span>
       </div>
       {filteredLogs.map(log => (

@@ -51,7 +51,6 @@ export default function App() {
   const [role, setRole] = useState(null); // null | 'admin' | staff
   const [loginAs, setLoginAs] = useState("staff"); // 'admin' | 'staff'
   const [password, setPassword] = useState("");
-  const [staffName, setStaffName] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedOutlet, setSelectedOutlet] = useState("");
   const [rolePassword, setRolePassword] = useState("");
@@ -67,10 +66,6 @@ export default function App() {
     if (loginAs === "admin" && password === ADMIN_PASSWORD) {
       setRole("admin"); setError("");
     } else if (loginAs === "staff") {
-      if (!staffName.trim()) {
-        setError("Please enter your name.");
-        return;
-      }
       if (!selectedRole) {
         setError("Please select a role.");
         return;
@@ -98,7 +93,6 @@ export default function App() {
   const logout = () => {
     setRole(null);
     setPassword("");
-    setStaffName("");
     setSelectedRole("");
     setSelectedOutlet("");
     setRolePassword("");
@@ -141,13 +135,6 @@ export default function App() {
           </>
         ) : (
           <>
-            <label style={S.label}>Your Name</label>
-            <input type="text" value={staffName} onChange={e => setStaffName(e.target.value)}
-              placeholder="Enter your name"
-              style={S.input}
-              onFocus={e => e.target.style.borderColor = "#000"}
-              onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
-
             <label style={S.label}>Select Role</label>
             <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); setSelectedOutlet(""); }}
               style={S.input}
@@ -221,7 +208,6 @@ export default function App() {
   const addLogWithStaff = (log) => {
     return addLog({
       ...log,
-      staffName: staffName,
       roleId: role._docId,
       roleName: role.name,
       outletId: selectedOutlet || null,
@@ -242,8 +228,6 @@ export default function App() {
           <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
           <span style={{ color: "#ddd" }}>›</span>
           <span style={{ fontSize: 12, color: "#888" }}>{role?.name || "Staff"}</span>
-          <span style={{ color: "#ddd" }}>›</span>
-          <span style={{ fontSize: 12, color: "#888", fontWeight: 500 }}>{staffName}</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {/* Tab switcher */}
@@ -265,7 +249,7 @@ export default function App() {
 
       {staffTab === "checklist"
         ? <StaffView templates={roleChecklists} onSubmit={addLogWithStaff} />
-        : <SubmittedLogs logs={logs} staffName={staffName} roleName={role?.name} />
+        : <SubmittedLogs logs={logs} roleName={role?.name} />
       }
     </div>
   );
