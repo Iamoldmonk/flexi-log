@@ -22,6 +22,9 @@ export default function OutletManager({ outlets = [], onSaveOutlet, onDeleteOutl
   const [showForm, setShowForm] = useState(false);
   const [editingOutlet, setEditingOutlet] = useState(null);
   const [formData, setFormData] = useState({ name: "", location: "", code: "" });
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [outletsToCopyTo, setOutletsToCopyTo] = useState([]);
+  const [pendingOutlet, setPendingOutlet] = useState(null);
 
   const handleNewOutlet = () => {
     setFormData({ name: "", location: "", code: "" });
@@ -45,6 +48,17 @@ export default function OutletManager({ outlets = [], onSaveOutlet, onDeleteOutl
       return;
     }
 
+    // If creating new outlet (not editing), show copy options
+    if (!editingOutlet && outlets.length > 0) {
+      setPendingOutlet({
+        name: formData.name,
+        location: formData.location,
+        code: formData.code,
+      });
+      setShowCopyModal(true);
+      return;
+    }
+
     await onSaveOutlet({
       _docId: editingOutlet,
       name: formData.name,
@@ -52,6 +66,30 @@ export default function OutletManager({ outlets = [], onSaveOutlet, onDeleteOutl
       code: formData.code,
     });
 
+    setShowForm(false);
+    setFormData({ name: "", location: "", code: "" });
+  };
+
+  const handleConfirmCopy = async () => {
+    if (!pendingOutlet) return;
+
+    // Create outlet in selected outlets
+    const outletsToCreate = outletsToCopyTo.length > 0
+      ? outletsToCopyTo
+      : [null]; // If none selected, create standalone
+
+    for (const outletId of outletsToCreate) {
+      await onSaveOutlet({
+        _docId: null,
+        name: pendingOutlet.name,
+        location: pendingOutlet.location,
+        code: pendingOutlet.code,
+      });
+    }
+
+    setShowCopyModal(false);
+    setOutletsToCopyTo([]);
+    setPendingOutlet(null);
     setShowForm(false);
     setFormData({ name: "", location: "", code: "" });
   };
@@ -106,6 +144,47 @@ export default function OutletManager({ outlets = [], onSaveOutlet, onDeleteOutl
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={handleSave} style={S.btn}>Save Outlet</button>
             <button onClick={() => setShowForm(false)} style={{ ...S.btn, background: "#E8E8E8", color: "#555" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {showCopyModal && (
+        <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 12, padding: 20, marginBottom: 20, background: "#FAFAFA" }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
+            Copy "{pendingOutlet?.name}" to other outlets?
+          </h3>
+
+          <p style={{ fontSize: 12, color: "#666", marginBottom: 14 }}>
+            Select which existing outlets should also have this outlet created, or leave empty to create standalone.
+          </p>
+
+          <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 8, padding: 12, background: "#fff", maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>
+            {outlets && outlets.length > 0 ? (
+              outlets.map(outlet => (
+                <label key={outlet._docId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F0F0F0", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={outletsToCopyTo.includes(outlet._docId)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setOutletsToCopyTo([...outletsToCopyTo, outlet._docId]);
+                      } else {
+                        setOutletsToCopyTo(outletsToCopyTo.filter(id => id !== outlet._docId));
+                      }
+                    }}
+                    style={{ width: 16, height: 16, cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: 12 }}>{outlet.name}</span>
+                </label>
+              ))
+            ) : (
+              <div style={{ fontSize: 12, color: "#aaa" }}>No outlets available</div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={handleConfirmCopy} style={S.btn}>Create Outlet</button>
+            <button onClick={() => { setShowCopyModal(false); setOutletsToCopyTo([]); setPendingOutlet(null); }} style={{ ...S.btn, background: "#E8E8E8", color: "#555" }}>Cancel</button>
           </div>
         </div>
       )}

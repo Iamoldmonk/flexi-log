@@ -9,29 +9,36 @@ import {
   deleteDoc,
   query,
   orderBy,
+  where,
 } from "firebase/firestore";
 
 /**
  * Real-time sync for templates collection.
  * Returns [templates, setTemplates] where setTemplates writes to Firestore.
  */
-export function useTemplates() {
+export function useTemplates(outletId = null) {
   const [templates, setLocal] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "templates"), (snap) => {
+    let q;
+    if (outletId) {
+      q = query(collection(db, "templates"), where("outletId", "==", outletId));
+    } else {
+      q = collection(db, "templates");
+    }
+    const unsub = onSnapshot(q, (snap) => {
       const docs = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
       setLocal(docs.length > 0 ? docs : null);
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, [outletId]);
 
-  const setTemplates = useCallback(async (newTemplates) => {
+  const setTemplates = useCallback(async (newTemplates, currentOutletId = outletId) => {
     if (!newTemplates) return;
 
-    // Get current doc IDs in Firestore
+    // Get current doc IDs in Firestore for this outlet
     const currentDocIds = new Set(
       (templates || []).map((t) => t._docId).filter(Boolean)
     );
@@ -49,9 +56,9 @@ export function useTemplates() {
       const { _docId, id, ...data } = t;
       // Use _docId if it exists (from Firestore), otherwise use id as doc ID
       const docId = _docId || id;
-      await setDoc(doc(db, "templates", docId), { ...data, id });
+      await setDoc(doc(db, "templates", docId), { ...data, id, outletId: currentOutletId });
     }
-  }, [templates]);
+  }, [templates, outletId]);
 
   return [templates, setTemplates, loading];
 }

@@ -526,16 +526,22 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
   const [activeId, setActiveId] = useState(initTemplates[0].id);
   const [mode, setMode] = useState("builder"); // builder | preview | dashboard | roles | outlets
   const [toast, setToast] = useState(null);
+  const [selectedOutlet, setSelectedOutlet] = useState(""); // Outlet filter for templates
   const [roles, saveRole, deleteRole] = useRoles();
   const [outlets, saveOutlet, deleteOutlet] = useOutlets();
 
   const setTemplates = (updater) => {
     setTemplatesLocal(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      if (onTemplatesChange) onTemplatesChange(next);
+      if (onTemplatesChange) onTemplatesChange(next, selectedOutlet);
       return next;
     });
   };
+
+  // Filter templates by selected outlet
+  const filteredTemplates = selectedOutlet
+    ? templates.filter(t => t.outletId === selectedOutlet)
+    : templates;
 
   const active = templates.find(t => t.id === activeId);
   const updateActive = (patch) => setTemplates(ts => ts.map(t => t.id === activeId ? { ...t, ...patch } : t));
@@ -555,6 +561,24 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
     while (templates.some(existing => existing.id === t.id)) {
       t = emptyTemplate();
     }
+
+    // If outlet is selected, assign template to it
+    if (selectedOutlet) {
+      t.outletId = selectedOutlet;
+    } else {
+      // If no outlet selected, ask user which outlets to copy to
+      const outletList = outlets.map(o => o.name).join(", ");
+      const shouldCopy = window.confirm(`Create template for all outlets?\n\n${outletList}\n\nClick OK to copy to all, Cancel to create for current selection only.`);
+      if (shouldCopy && outlets.length > 0) {
+        // Create template for each outlet
+        const newTemplates = outlets.map(o => ({ ...t, outletId: o._docId, id: uid() }));
+        setTemplates(ts => [...ts, ...newTemplates]);
+        setActiveId(newTemplates[0].id);
+        setMode("builder");
+        return;
+      }
+    }
+
     setTemplates(ts => [...ts, t]);
     setActiveId(t.id);
     setMode("builder");
@@ -589,6 +613,14 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {toast && <span style={{ fontSize: 11.5, color: "#2d9e2d", fontWeight: 600 }}>✓ {toast}</span>}
+          {mode !== "roles" && mode !== "outlets" && (
+            <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} style={{ padding: "5px 10px", border: "1.5px solid #E8E8E8", borderRadius: 7, fontSize: 11.5, fontWeight: 600, background: "#fff", cursor: "pointer" }}>
+              <option value="">All Outlets</option>
+              {outlets && outlets.map(o => (
+                <option key={o._docId} value={o._docId}>{o.name}</option>
+              ))}
+            </select>
+          )}
           <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
             {[["builder", "Builder"], ["preview", "Preview"], ["dashboard", `Dashboard${logs.length > 0 ? " (" + logs.length + ")" : ""}`], ["roles", "Roles"], ["outlets", "Outlets"]].map(([m, lbl]) => (
               <button key={m} onClick={() => setMode(m)} style={{
@@ -611,7 +643,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
       {mode === "outlets" && <OutletManager outlets={outlets} onSaveOutlet={saveOutlet} onDeleteOutlet={deleteOutlet} />}
 
       {mode !== "dashboard" && mode !== "roles" && mode !== "outlets" && <div style={{ display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
-        <TemplatesSidebar templates={templates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} />
+        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} />
 
         {mode === "builder" ? (
           <div style={{ flex: 1, minWidth: 0 }}>
