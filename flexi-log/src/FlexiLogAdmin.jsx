@@ -1,7 +1,5 @@
 import { useState } from "react";
 import AdminDashboard from "./AdminDashboard";
-import RoleManager from "./RoleManager";
-import { useRoles } from "./useFirestore";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FIELD_TYPES = [
@@ -523,9 +521,8 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
   const initTemplates = externalTemplates || [emptyTemplate()];
   const [templates, setTemplatesLocal] = useState(initTemplates);
   const [activeId, setActiveId] = useState(initTemplates[0].id);
-  const [mode, setMode] = useState("builder"); // builder | preview | dashboard | roles
+  const [mode, setMode] = useState("builder"); // builder | preview | dashboard
   const [toast, setToast] = useState(null);
-  const [roles, saveRole, deleteRole] = useRoles();
 
   const setTemplates = (updater) => {
     setTemplatesLocal(prev => {
@@ -579,7 +576,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {toast && <span style={{ fontSize: 11.5, color: "#2d9e2d", fontWeight: 600 }}>✓ {toast}</span>}
           <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
-            {[["builder", "Builder"], ["preview", "Preview"], ["dashboard", `Dashboard${logs.length > 0 ? " (" + logs.length + ")" : ""}`], ["roles", "Roles"]].map(([m, lbl]) => (
+            {[["builder", "Builder"], ["preview", "Preview"], ["dashboard", `Dashboard${logs.length > 0 ? " (" + logs.length + ")" : ""}`]].map(([m, lbl]) => (
               <button key={m} onClick={() => setMode(m)} style={{
                 padding: "5px 11px", border: "none", borderRadius: 6, fontSize: 11.5, fontWeight: 600,
                 background: mode === m ? "#fff" : "transparent",
@@ -595,9 +592,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
 
       {mode === "dashboard" && <AdminDashboard logs={logs} templates={templates} />}
 
-      {mode === "roles" && <RoleManager roles={roles} templates={templates} onSaveRole={saveRole} onDeleteRole={deleteRole} />}
-
-      {mode !== "dashboard" && mode !== "roles" && <div style={{ display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
+      {mode !== "dashboard" && <div style={{ display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
         <TemplatesSidebar templates={templates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} />
 
         {mode === "builder" ? (

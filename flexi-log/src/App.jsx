@@ -2,7 +2,6 @@ import { useState } from "react";
 import FlexiLogAdmin from "./FlexiLogAdmin";
 import StaffView from "./StaffView";
 import SubmittedLogs from "./SubmittedLogs";
-import { useTemplates, useLogs, useRoles } from "./useFirestore";
 
 const ADMIN_PASSWORD = "admin123";
 const STAFF_PASSWORD = "staff123";
@@ -48,53 +47,28 @@ const S = {
 };
 
 export default function App() {
-  const [role, setRole] = useState(null); // null | 'admin' | staff
+  const [role, setRole] = useState(null); // null | 'admin' | 'staff'
   const [loginAs, setLoginAs] = useState("staff"); // 'admin' | 'staff'
   const [password, setPassword] = useState("");
-  const [staffName, setStaffName] = useState("");
-  const [selectedRole, setSelectedRole] = useState("");
-  const [rolePassword, setRolePassword] = useState("");
   const [error, setError] = useState("");
   const [staffTab, setStaffTab] = useState("checklist"); // 'checklist' | 'logs'
-  // Real-time Firestore sync for templates, logs & roles
-  const [templates, setTemplates, templatesLoading] = useTemplates();
-  const [logs, addLog, logsLoading] = useLogs();
-  const [roles] = useRoles();
+  // Shared log store lifted here so admin & staff both see submitted logs
+  const [logs, setLogs] = useState([]);
+  // Shared templates lifted here so staff sees what admin builds
+  const [templates, setTemplates] = useState(null);
 
   const login = () => {
     if (loginAs === "admin" && password === ADMIN_PASSWORD) {
       setRole("admin"); setError("");
-    } else if (loginAs === "staff") {
-      if (!staffName.trim()) {
-        setError("Please enter your name.");
-        return;
-      }
-      if (!selectedRole) {
-        setError("Please select a role.");
-        return;
-      }
-      const matchedRole = roles?.find(r => r._docId === selectedRole);
-      if (!matchedRole || matchedRole.password !== rolePassword) {
-        setError("Incorrect role or password.");
-        return;
-      }
-      setRole(matchedRole); // Store role object with checklists
-      setError("");
+    } else if (loginAs === "staff" && password === STAFF_PASSWORD) {
+      setRole("staff"); setError("");
     } else {
       setError("Incorrect password. Please try again.");
     }
     setPassword("");
-    setRolePassword("");
   };
 
-  const logout = () => {
-    setRole(null);
-    setPassword("");
-    setStaffName("");
-    setSelectedRole("");
-    setRolePassword("");
-    setError("");
-  };
+  const logout = () => { setRole(null); setPassword(""); setError(""); };
 
   if (!role) return (
     <div style={S.page}>
@@ -120,50 +94,18 @@ export default function App() {
 
         {error && <div style={S.error}>{error}</div>}
 
-        {loginAs === "admin" ? (
-          <>
-            <label style={S.label}>Admin Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && login()}
-              placeholder="Enter admin password"
-              style={S.input}
-              onFocus={e => e.target.style.borderColor = "#000"}
-              onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
-          </>
-        ) : (
-          <>
-            <label style={S.label}>Your Name</label>
-            <input type="text" value={staffName} onChange={e => setStaffName(e.target.value)}
-              placeholder="Enter your name"
-              style={S.input}
-              onFocus={e => e.target.style.borderColor = "#000"}
-              onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
-
-            <label style={S.label}>Select Role</label>
-            <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
-              style={S.input}
-              onFocus={e => e.target.style.borderColor = "#000"}
-              onBlur={e => e.target.style.borderColor = "#E8E8E8"}>
-              <option value="">-- Choose a role --</option>
-              {roles && roles.map(r => (
-                <option key={r._docId} value={r._docId}>{r.name}</option>
-              ))}
-            </select>
-
-            <label style={S.label}>Role Password</label>
-            <input type="password" value={rolePassword} onChange={e => setRolePassword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && login()}
-              placeholder="Enter role password"
-              style={S.input}
-              onFocus={e => e.target.style.borderColor = "#000"}
-              onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
-          </>
-        )}
+        <label style={S.label}>Password</label>
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && login()}
+          placeholder={loginAs === "admin" ? "Admin password" : "Staff password"}
+          style={S.input}
+          onFocus={e => e.target.style.borderColor = "#000"}
+          onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
 
         <button onClick={login} style={S.btn(true)}>Sign In</button>
 
         <div style={{ textAlign: "center", marginTop: 18, fontSize: 11, color: "#ccc" }}>
-          {loginAs === "admin" ? "Demo: admin = admin123" : "Create a role in Admin panel"}
+          Demo: admin = <b>admin123</b> · staff = <b>staff123</b>
         </div>
       </div>
     </div>
@@ -178,21 +120,7 @@ export default function App() {
     />
   );
 
-  // Staff view - filter templates by role
-  const roleChecklists = role && typeof role === 'object' && role.assignedChecklists
-    ? templates?.filter(t => role.assignedChecklists.includes(t._docId))
-    : [];
-
-  // Wrap addLog to include staff details
-  const addLogWithStaff = (log) => {
-    return addLog({
-      ...log,
-      staffName: staffName,
-      roleId: role._docId,
-      roleName: role.name,
-    });
-  };
-
+  // Staff view
   return (
     <div style={{ fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif", background: "#F5F5F3", minHeight: "100vh" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap'); * { box-sizing: border-box; margin: 0; padding: 0; } button { font-family: inherit; }`}</style>
@@ -205,9 +133,7 @@ export default function App() {
           </div>
           <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
           <span style={{ color: "#ddd" }}>›</span>
-          <span style={{ fontSize: 12, color: "#888" }}>{role?.name || "Staff"}</span>
-          <span style={{ color: "#ddd" }}>›</span>
-          <span style={{ fontSize: 12, color: "#888", fontWeight: 500 }}>{staffName}</span>
+          <span style={{ fontSize: 12, color: "#888" }}>Staff</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {/* Tab switcher */}
@@ -228,8 +154,8 @@ export default function App() {
       </div>
 
       {staffTab === "checklist"
-        ? <StaffView templates={roleChecklists} onSubmit={addLogWithStaff} />
-        : <SubmittedLogs logs={logs} staffName={staffName} roleName={role?.name} />
+        ? <StaffView templates={templates} onSubmit={log => setLogs(prev => [log, ...prev])} />
+        : <SubmittedLogs logs={logs} />
       }
     </div>
   );
