@@ -2,6 +2,7 @@ import { useState } from "react";
 import FlexiLogAdmin from "./FlexiLogAdmin";
 import StaffView from "./StaffView";
 import SubmittedLogs from "./SubmittedLogs";
+import { useTemplates, useLogs } from "./useFirestore";
 
 const ADMIN_PASSWORD = "admin123";
 const STAFF_PASSWORD = "staff123";
@@ -52,10 +53,9 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [staffTab, setStaffTab] = useState("checklist"); // 'checklist' | 'logs'
-  // Shared log store lifted here so admin & staff both see submitted logs
-  const [logs, setLogs] = useState([]);
-  // Shared templates lifted here so staff sees what admin builds
-  const [templates, setTemplates] = useState(null);
+  // Real-time Firestore sync for templates & logs
+  const [templates, setTemplates, templatesLoading] = useTemplates();
+  const [logs, addLog, logsLoading] = useLogs();
 
   const login = () => {
     if (loginAs === "admin" && password === ADMIN_PASSWORD) {
@@ -154,7 +154,7 @@ export default function App() {
       </div>
 
       {staffTab === "checklist"
-        ? <StaffView templates={templates} onSubmit={log => setLogs(prev => [log, ...prev])} />
+        ? <StaffView templates={templates} onSubmit={addLog} />
         : <SubmittedLogs logs={logs} />
       }
     </div>
