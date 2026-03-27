@@ -13,7 +13,7 @@ const FIELD_TYPES = [
   { id: "signature", label: "Signature",   icon: "✍", desc: "Staff sign-off" },
 ];
 
-const RECURRENCE = ["Daily", "Weekdays", "Mon / Wed / Fri", "Weekly", "Custom"];
+const RECURRENCE = ["None", "Hourly", "Every X Hours", "Daily", "Weekdays", "Mon / Wed / Fri", "Every X Days", "Weekly", "Fortnightly", "Monthly", "Last Weekday of Month", "Custom"];
 const INVENTORY_ITEMS = ["— None —", "Coconuts", "Milk (L)", "Oil (L)", "Sugar (kg)", "Packaging"];
 
 let _id = 100;
@@ -32,6 +32,9 @@ const defaultField = (typeId) => ({
   maxStars: 5, ratingLabel: "",
   dropdownOptions: ["Option 1", "Option 2"], multiSelect: false,
   sigNote: "",
+  subTasks: [],
+  requirePhoto: false,
+  referencePhoto: null,
 });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -96,10 +99,6 @@ function FieldConfig({ field, onUpdate }) {
   const t = field.type;
   return (
     <div style={{ padding: "14px 16px", background: "#FAFAFA", borderRadius: "0 0 11px 11px" }}>
-      <div style={{ marginBottom: 10 }}>
-        <label style={S.label}>Field Label</label>
-        <Inp value={field.label} onChange={v => u({ label: v })} placeholder="e.g. Coconuts used today" />
-      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, padding: "8px 10px", background: "#F0F0F0", borderRadius: 8 }}>
         <input type="checkbox" checked={field.required} onChange={e => u({ required: e.target.checked })} style={S.check} />
         <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a" }}>Required</span>
@@ -288,6 +287,54 @@ function FieldConfig({ field, onUpdate }) {
         <label style={S.label}>Instruction shown above sign box</label>
         <Inp value={field.sigNote} onChange={v => u({ sigNote: v })} placeholder="e.g. I confirm all tasks above are complete" />
       </div>}
+
+      <div style={S.section}>
+        <SectionTitle>PHOTO CAPTURE & REFERENCE</SectionTitle>
+        <CheckRow label="Require photo for this field" checked={field.requirePhoto || false} onChange={v => u({ requirePhoto: v })}>
+          Staff must capture a photo to complete this field
+        </CheckRow>
+        <div style={{ marginTop: 8 }}>
+          <label style={S.label}>Reference Photo (shown to staff)</label>
+          {field.referencePhoto ? (
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <img src={field.referencePhoto} alt="reference" style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E8E8E8" }} />
+              <button onClick={() => u({ referencePhoto: null })} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "#ff6060", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
+          ) : (
+            <label style={{ display: "block", border: "2px dashed #D8D8D8", borderRadius: 9, padding: "14px 0", textAlign: "center", cursor: "pointer", background: "#FAFAFA" }}>
+              <div style={{ fontSize: 18, color: "#ccc" }}>◉</div>
+              <div style={{ fontSize: 11, color: "#bbb", marginTop: 3 }}>Upload reference photo</div>
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => u({ referencePhoto: ev.target.result });
+                reader.readAsDataURL(file);
+              }} />
+            </label>
+          )}
+          {field.referencePhoto && <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>Staff will see this as a guide when filling the field</div>}
+        </div>
+      </div>
+
+      <div style={S.section}>
+        <SectionTitle>SUB-TASKS (NESTED CHECKLIST)</SectionTitle>
+        <div style={{ fontSize: 11, color: "#aaa", marginBottom: 8 }}>Break this field into smaller steps staff must complete</div>
+        {(field.subTasks || []).map((st, i) => (
+          <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+            <div style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid #D8D8D8", background: "#fff", flexShrink: 0 }} />
+            <input value={st} onChange={e => { const arr = [...(field.subTasks || [])]; arr[i] = e.target.value; u({ subTasks: arr }); }}
+              placeholder={`Sub-task ${i + 1}`} style={{ ...S.input, flex: 1 }}
+              onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
+            <button onClick={() => u({ subTasks: (field.subTasks || []).filter((_, j) => j !== i) })}
+              style={{ width: 28, height: 34, border: "1.5px solid #E8E8E8", borderRadius: 7, background: "#fff", color: "#ff6060", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          </div>
+        ))}
+        <button onClick={() => u({ subTasks: [...(field.subTasks || []), ""] })} style={{
+          width: "100%", padding: "7px", border: "1.5px dashed #D8D8D8", borderRadius: 8,
+          background: "none", fontSize: 12, fontWeight: 600, color: "#888", cursor: "pointer", fontFamily: "inherit",
+        }}>+ Add sub-task</button>
+      </div>
     </div>
   );
 }
@@ -304,9 +351,13 @@ function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast }) {
           {type.icon}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {field.label || <span style={{ color: "#bbb" }}>Untitled {type.label}</span>}
-          </div>
+          <input
+            value={field.label}
+            onChange={e => onUpdate({ label: e.target.value })}
+            onClick={e => e.stopPropagation()}
+            placeholder={`Untitled ${type.label}`}
+            style={{ width: "100%", fontSize: 12.5, fontWeight: 600, color: "#1a1a1a", border: "none", outline: "none", background: "transparent", padding: 0, cursor: "text", fontFamily: "inherit" }}
+          />
           <div style={{ fontSize: 10.5, color: "#aaa", marginTop: 1 }}>{type.label}{field.required ? " · Required" : ""}</div>
         </div>
         <div style={{ display: "flex", gap: 3 }}>
@@ -454,7 +505,17 @@ function Preview({ template }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-const emptyTemplate = () => ({ id: uid(), name: "", recurrence: "Daily", time: "08:00", escalate: false, escalateMin: 30, fields: [] });
+const emptyRecurrence = () => ({
+  quick: "Every day",      // quick preset
+  unit: "day",             // hour|day|week|month
+  interval: 1,             // every N units
+  days: [],                // for weekly: [0-6] sun=0
+  endsType: "never",       // never|on|after
+  endsDate: "",
+  endsAfter: 1,
+  autoReset: "schedule",   // schedule|completion
+});
+const emptyTemplate = () => ({ id: uid(), name: "", time: "08:00", recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, fields: [] });
 
 export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange }) {
   const initTemplates = externalTemplates || [emptyTemplate()];
@@ -544,11 +605,116 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                   style={{ ...S.input, fontSize: 14.5, fontWeight: 500, padding: "10px 12px" }}
                   onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={S.label}>Recurrence</label>
-                  <Sel value={active.recurrence} onChange={v => updateActive({ recurrence: v })} options={RECURRENCE} />
-                </div>
+              {/* ── Recurrence (Google Calendar-style) ── */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={S.label}>Recurrence</label>
+                {(() => {
+                  const rec = active.recurrence || emptyRecurrence();
+                  const upRec = patch => updateActive({ recurrence: { ...rec, ...patch } });
+                  const DAYS = ["S","M","T","W","T","F","S"];
+                  return (
+                    <div>
+                      {/* Quick presets */}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                        {["Does not repeat","Every day","Every week","Every month","Custom..."].map(q => (
+                          <button key={q} onClick={() => upRec({ quick: q })} style={{
+                            ...S.chip(rec.quick === q), fontSize: 11, padding: "5px 10px",
+                          }}>{q}</button>
+                        ))}
+                      </div>
+                      {/* Day picker — shown for Every day, Every week, and Custom week */}
+                      {(rec.quick === "Every day" || rec.quick === "Every week") && (
+                        <div style={{ padding: "12px 14px", background: "#F8F8F8", border: "1.5px solid #E0E0E0", borderRadius: 10, marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, color: "#666", marginBottom: 7 }}>
+                            {rec.quick === "Every day" ? "Repeats on these days" : "Repeats on"}
+                          </div>
+                          <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
+                            {["S","M","T","W","T","F","S"].map((d, i) => {
+                              const sel = (rec.days || []).includes(i);
+                              return <div key={i} onClick={() => {
+                                const arr = rec.days || [];
+                                upRec({ days: sel ? arr.filter(x => x !== i) : [...arr, i] });
+                              }} style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, cursor: "pointer", background: sel ? "#000" : "#fff", color: sel ? "#fff" : "#555", border: "1.5px solid " + (sel ? "#000" : "#D8D8D8") }}>{d}</div>;
+                            })}
+                          </div>
+                          {(rec.days || []).length === 0 && (
+                            <div style={{ fontSize: 11, color: "#bbb", fontStyle: "italic" }}>No days selected — will run every day by default</div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Custom panel */}
+                      {rec.quick === "Custom..." && (
+                        <div style={{ padding: "12px 14px", background: "#F8F8F8", border: "1.5px solid #E0E0E0", borderRadius: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.06em", marginBottom: 10 }}>CUSTOM RECURRENCE</div>
+                          {/* Repeats every N unit */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                            <span style={{ fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>Repeats every</span>
+                            <input type="number" min="1" max="99" value={rec.interval || 1}
+                              onChange={e => upRec({ interval: Math.max(1, parseInt(e.target.value) || 1) })}
+                              style={{ ...S.input, width: 56, textAlign: "center", padding: "6px 8px" }}
+                              onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
+                            <select value={rec.unit || "day"} onChange={e => upRec({ unit: e.target.value })}
+                              style={{ ...S.input, width: 100, padding: "6px 8px" }}
+                              onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"}>
+                              {["hour","day","week","month"].map(u => <option key={u}>{u}</option>)}
+                            </select>
+                          </div>
+                          {/* Day picker for weekly */}
+                          {rec.unit === "week" && (
+                            <div style={{ marginBottom: 10 }}>
+                              <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>Repeats on</div>
+                              <div style={{ display: "flex", gap: 5 }}>
+                                {["S","M","T","W","T","F","S"].map((d, i) => {
+                                  const sel = (rec.days || []).includes(i);
+                                  return <div key={i} onClick={() => {
+                                    const arr = rec.days || [];
+                                    upRec({ days: sel ? arr.filter(x => x !== i) : [...arr, i] });
+                                  }} style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, cursor: "pointer", background: sel ? "#000" : "#fff", color: sel ? "#fff" : "#555", border: "1.5px solid " + (sel ? "#000" : "#D8D8D8") }}>{d}</div>;
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {/* Ends */}
+                          <div>
+                            <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>Ends</div>
+                            {[{ v: "never", label: "Never" }, { v: "on", label: "On" }, { v: "after", label: "After" }].map(opt => (
+                              <label key={opt.v} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, cursor: "pointer" }}>
+                                <div onClick={() => upRec({ endsType: opt.v })} style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid " + (rec.endsType === opt.v ? "#000" : "#D8D8D8"), background: rec.endsType === opt.v ? "#000" : "#fff", flexShrink: 0 }}/>
+                                <span style={{ fontSize: 12, color: "#555" }}>{opt.label}</span>
+                                {opt.v === "on" && rec.endsType === "on" && (
+                                  <input type="date" value={rec.endsDate || ""} onChange={e => upRec({ endsDate: e.target.value })}
+                                    style={{ ...S.input, flex: 1, padding: "5px 8px" }}
+                                    onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
+                                )}
+                                {opt.v === "after" && rec.endsType === "after" && (
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    <input type="number" min="1" value={rec.endsAfter || 1} onChange={e => upRec({ endsAfter: Math.max(1, parseInt(e.target.value) || 1) })}
+                                      style={{ ...S.input, width: 56, textAlign: "center", padding: "5px 8px" }}
+                                      onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
+                                    <span style={{ fontSize: 12, color: "#888" }}>occurrence{(rec.endsAfter || 1) !== 1 ? "s" : ""}</span>
+                                  </div>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                          {/* Auto-reset */}
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #E8E8E8" }}>
+                            <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>Auto-reset</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {[["schedule","On Schedule"],["completion","On Completion"]].map(([v,lbl]) => (
+                                <button key={v} onClick={() => upRec({ autoReset: v })} style={S.chip((rec.autoReset || "schedule") === v)}>{lbl}</button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* Start time */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label style={S.label}>Start Time</label>
                   <input type="time" value={active.time} onChange={e => updateActive({ time: e.target.value })} style={S.input}

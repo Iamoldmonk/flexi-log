@@ -12,7 +12,7 @@ function LogCard({ log, onExpand, expanded }) {
       <div onClick={onExpand} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a" }}>{log.templateName}</div>
-          <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>Submitted {log.submittedAtDisplay || log.submittedAt}</div>
+          <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>Submitted {log.submittedAt}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ background: "#2d9e2d18", border: "1.5px solid #2d9e2d35", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#2d9e2d" }}>✓ Submitted</div>

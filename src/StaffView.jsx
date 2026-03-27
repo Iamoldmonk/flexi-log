@@ -1,6 +1,130 @@
 import { useState, useRef, useEffect } from "react";
 import { initStock, getStock, applyUsage, isLowStock } from "./inventoryStore";
 
+// ─── Progress Bar ────────────────────────────────────────────────────────────
+function ProgressBar({ fields, values, sigDone = {} }) {
+  if (fields.length === 0) return null;
+
+  // Count field completions + sub-task completions
+  let totalItems = 0, doneItems = 0;
+  fields.forEach(f => {
+    totalItems++; // the field itself
+    const subTasks = f.subTasks || [];
+    totalItems += subTasks.length; // each sub-task is its own item
+
+    // sub-tasks done?
+    const checked = values[f.id + "_sub"] || {};
+    const allSubTasksDone = subTasks.length > 0 && subTasks.every((_, i) => checked[i]);
+    subTasks.forEach((_, i) => { if (checked[i]) doneItems++; });
+
+    // field done? — also counts as done if all its sub-tasks are completed
+    let fieldDone = false;
+    if (f.type === "signature") fieldDone = !!sigDone[f.id];
+    else if (f.type === "toggle") fieldDone = !!values[f.id];
+    else if (f.type === "rating") fieldDone = (values[f.id] || 0) > 0;
+    else if (f.type === "timestamp") fieldDone = true;
+    else fieldDone = !!values[f.id];
+    if (fieldDone || allSubTasksDone) doneItems++;
+  });
+
+  const pct = Math.round((doneItems / totalItems) * 100);
+  const color = pct === 100 ? "#2d9e2d" : pct >= 50 ? "#2980b9" : "#e67e22";
+  const fieldsDone = fields.filter(f => {
+    const sub = values[f.id + "_sub"] || {};
+    const allSub = (f.subTasks || []).length > 0 && (f.subTasks || []).every((_, i) => sub[i]);
+    if (allSub) return true;
+    if (f.type === "signature") return !!sigDone[f.id];
+    if (f.type === "toggle") return !!values[f.id];
+    if (f.type === "rating") return (values[f.id] || 0) > 0;
+    if (f.type === "timestamp") return true;
+    return !!values[f.id];
+  }).length;
+
+  return (
+    <div style={{ padding: "12px 16px", background: "#fff", borderBottom: "1px solid #F0F0F0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#888" }}>Progress</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color }}>
+          {fieldsDone}/{fields.length} fields · {doneItems}/{totalItems} items {pct === 100 ? "✓" : `(${pct}%)`}
+        </span>
+      </div>
+      <div style={{ height: 7, background: "#F0F0F0", borderRadius: 3, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3, transition: "width 0.4s ease" }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-tasks component ──────────────────────────────────────────────────────
+function SubTasks({ subTasks, fieldId, values, onChange }) {
+  const fileRefs = useRef({});
+  if (!subTasks || subTasks.length === 0) return null;
+  const checked = values[fieldId + "_sub"] || {};
+  const photos = values[fieldId + "_subphotos"] || {};
+  const doneCount = Object.values(checked).filter(Boolean).length;
+
+  const handlePhoto = (i, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const updated = { ...photos, [i]: ev.target.result };
+      onChange(fieldId + "_subphotos", updated);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ marginTop: 10, padding: "10px 12px", background: "#F8F8F8", borderRadius: 9, border: "1.5px solid #EBEBEB" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.06em", marginBottom: 6 }}>
+        SUB-TASKS — {doneCount}/{subTasks.length}
+      </div>
+      <div style={{ height: 4, background: "#E8E8E8", borderRadius: 2, overflow: "hidden", marginBottom: 10 }}>
+        <div style={{ height: "100%", width: `${subTasks.length > 0 ? (doneCount / subTasks.length) * 100 : 0}%`, background: "#2d9e2d", borderRadius: 2, transition: "width 0.3s" }} />
+      </div>
+      {subTasks.map((st, i) => (
+        <div key={i} style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", background: checked[i] ? "#F0FFF5" : "#fff", borderRadius: 8, border: `1.5px solid ${checked[i] ? "#B0EAC8" : "#E8E8E8"}`, transition: "all 0.15s", cursor: "pointer" }}
+            onClick={() => onChange(fieldId + "_sub", { ...checked, [i]: !checked[i] })}>
+            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked[i] ? "#2d9e2d" : "#D8D8D8"}`, background: checked[i] ? "#2d9e2d" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {checked[i] && <span style={{ color: "#fff", fontSize: 10, fontWeight: 900 }}>✓</span>}
+            </div>
+            <span style={{ fontSize: 12, color: checked[i] ? "#2d9e2d" : "#1a1a1a", textDecoration: checked[i] ? "line-through" : "none", flex: 1 }}>{st}</span>
+            {/* Photo capture button per sub-task */}
+            <div onClick={e => { e.stopPropagation(); fileRefs.current[i]?.click(); }} style={{ width: 28, height: 28, borderRadius: 6, background: photos[i] ? "#2d9e2d18" : "#F0F0F0", border: `1.5px solid ${photos[i] ? "#2d9e2d35" : "#E8E8E8"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", fontSize: 12, color: photos[i] ? "#2d9e2d" : "#aaa" }}>
+              {photos[i] ? "✓" : "◉"}
+            </div>
+            <input ref={el => fileRefs.current[i] = el} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => handlePhoto(i, e)} />
+          </div>
+          {photos[i] && (
+            <div style={{ marginTop: 4, paddingLeft: 36, display: "flex", alignItems: "center", gap: 6 }}>
+              <img src={photos[i]} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, border: "1.5px solid #E8E8E8" }} />
+              <button onClick={() => onChange(fieldId + "_subphotos", { ...photos, [i]: null })} style={{ fontSize: 11, color: "#ff6060", background: "none", border: "none", cursor: "pointer" }}>Remove</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Recurrence label helper ──────────────────────────────────────────────────
+function recurrenceLabel(tpl) {
+  const rec = tpl.recurrence;
+  if (!rec || typeof rec === "string") return rec || "Daily";
+  if (rec.quick !== "Custom...") return rec.quick || "Every day";
+  const iv = rec.interval || 1;
+  const unit = rec.unit || "day";
+  const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  let label = `Every ${iv > 1 ? iv + " " : ""}${unit}${iv > 1 ? "s" : ""}`;
+  if (unit === "week" && (rec.days || []).length > 0) {
+    label += " on " + rec.days.sort().map(d => DAYS[d]).join(", ");
+  }
+  if (rec.endsType === "on" && rec.endsDate) label += ` until ${rec.endsDate}`;
+  if (rec.endsType === "after") label += `, ${rec.endsAfter || 1} time${(rec.endsAfter || 1) > 1 ? "s" : ""}`;
+  return label;
+}
+
 const DEFAULT_TEMPLATES = [
   {
     id: "t1", name: "Morning Opening Checklist", recurrence: "Daily", time: "08:00",
@@ -299,13 +423,74 @@ function StockHistory({ templates }) {
   );
 }
 
+// ─── Submitted Logs View ─────────────────────────────────────────────────────
+function SubmittedLogsView({ logs }) {
+  const [exp, setExp] = useState(null);
+  if (logs.length === 0) return (
+    <div style={{ textAlign: "center", padding: "60px 20px", color: "#bbb" }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No logs yet</div>
+      <div style={{ fontSize: 12 }}>Your submitted checklists will appear here</div>
+    </div>
+  );
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "18px 14px" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 10 }}>MY SUBMITTED LOGS — {logs.length}</div>
+      {logs.map(log => (
+        <div key={log.id} style={{ border: "1.5px solid #EBEBEB", borderRadius: 12, overflow: "hidden", marginBottom: 8, background: "#fff" }}>
+          <div onClick={() => setExp(exp === log.id ? null : log.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 15px", cursor: "pointer" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{log.templateName}</div>
+              <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{log.submittedAt}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ background: "#2d9e2d18", border: "1px solid #2d9e2d35", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#2d9e2d" }}>✓ Submitted</span>
+              <span style={{ fontSize: 11, color: "#ccc" }}>{exp === log.id ? "▴" : "▾"}</span>
+            </div>
+          </div>
+          {exp === log.id && (
+            <div style={{ borderTop: "1px solid #F0F0F0", padding: "12px 15px" }}>
+              {log.fields.map(f => {
+                const val = log.values[f.id];
+                const sub = log.values[f.id + "_sub"] || {};
+                return (
+                  <div key={f.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #F8F8F8" }}>
+                    <div style={{ fontSize: 11, color: "#aaa", marginBottom: 3 }}>{f.label}</div>
+                    {f.type === "toggle" && <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: val === "yes" ? "#2d9e2d18" : "#F5F5F5", color: val === "yes" ? "#2d9e2d" : "#999" }}>{val === "yes" ? f.yesLabel || "Done" : val === "no" ? f.noLabel || "Skip" : "—"}</span>}
+                    {(f.type === "text" || f.type === "number") && <div style={{ fontSize: 13, color: val ? "#1a1a1a" : "#ccc" }}>{val ? `${val}${f.unit ? " " + f.unit : ""}` : "—"}</div>}
+                    {f.type === "rating" && <div style={{ display: "flex", gap: 2 }}>{Array.from({ length: f.maxStars || 5 }).map((_, i) => <span key={i} style={{ fontSize: 14, color: i < (val || 0) ? "#f4a825" : "#E8E8E8" }}>★</span>)}</div>}
+                    {f.type === "dropdown" && <div style={{ fontSize: 13, color: val ? "#1a1a1a" : "#ccc" }}>{val || "—"}</div>}
+                    {f.type === "signature" && <div style={{ fontSize: 12, color: val ? "#2d9e2d" : "#ccc" }}>{val ? "✓ Signed" : "—"}</div>}
+                    {f.type === "photo" && val && val.length > 0 && <div style={{ display: "flex", gap: 6, marginTop: 4 }}>{val.map((src, i) => <img key={i} src={src} alt="" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 7, border: "1.5px solid #E8E8E8" }} />)}</div>}
+                    {(f.subTasks || []).length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        {f.subTasks.map((st, i) => (
+                          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: sub[i] ? "#2d9e2d" : "#aaa", marginTop: 3 }}>
+                            <span style={{ fontSize: 10 }}>{sub[i] ? "✓" : "○"}</span>
+                            <span style={{ textDecoration: sub[i] ? "line-through" : "none" }}>{st}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function StaffView({ templates, onSubmit }) {
   const allTemplates = templates || DEFAULT_TEMPLATES;
   const [selectedId, setSelectedId] = useState(allTemplates[0]?.id || null);
   const [values, setValues] = useState({});
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedIds, setSubmittedIds] = useState({}); // tracks which template ids have been submitted
   const [errors, setErrors] = useState({});
   const [tab, setTab] = useState("checklist");
+  const [myLogs, setMyLogs] = useState([]); // session logs for this staff member
 
   const template = allTemplates.find(t => t.id === selectedId) || allTemplates[0];
 
@@ -326,6 +511,7 @@ export default function StaffView({ templates, onSubmit }) {
 
   const handleSubmit = () => {
     if (!template) return;
+    if (submittedIds[template.id]) return; // prevent re-submit
     const newErrors = {};
     template.fields.forEach(f => { if (f.required && !values[f.id]) newErrors[f.id] = "This field is required"; });
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
@@ -334,74 +520,111 @@ export default function StaffView({ templates, onSubmit }) {
         const used = Number(values[f.id]) || 0;
         const wasted = f.trackWaste ? (Number(values[f.id + "_waste"]) || 0) : 0;
         const total = used + wasted;
-        if (total > 0) {
-          applyUsage(f.id, total, f.inventoryAction || "subtract", { used, wasted });
-        }
+        if (total > 0) applyUsage(f.id, total, f.inventoryAction || "subtract", { used, wasted });
       }
     });
-    onSubmit({ id: Date.now(), templateName: template.name, submittedAtDisplay: new Date().toLocaleString(), values: { ...values }, fields: template.fields });
-    setSubmitted(true);
+    const log = { id: Date.now(), templateName: template.name, submittedAt: new Date().toLocaleString(), values: { ...values }, fields: template.fields };
+    onSubmit(log);
+    setMyLogs(prev => [log, ...prev]);
+    setSubmittedIds(prev => ({ ...prev, [template.id]: true }));
   };
 
-  if (submitted) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 52px)" }}>
-      <div style={{ textAlign: "center", padding: 40 }}>
-        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#2d9e2d18", border: "2px solid #2d9e2d", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 28, color: "#2d9e2d" }}>OK</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", marginBottom: 6 }}>Log Submitted!</div>
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>Inventory has been updated automatically.</div>
-        <button onClick={() => { setSubmitted(false); setValues({}); }} style={{ padding: "10px 24px", background: "#000", border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Submit Another</button>
-      </div>
-    </div>
-  );
+  const isSubmitted = template && !!submittedIds[template.id];
+  const submittedCount = Object.keys(submittedIds).length;
 
   return (
     <div>
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "16px 16px 0" }}>
         <div style={{ display: "flex", gap: 4, background: "#EBEBEB", borderRadius: 9, padding: 3, marginBottom: 16 }}>
-          {[["checklist", "Checklist"], ["history", "Stock History"]].map(([k, lbl]) => (
+          {[["checklist", "Checklist"], ["history", "Stock"], ["logs", `My Logs${myLogs.length > 0 ? " (" + myLogs.length + ")" : ""}`]].map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k)} style={{
-              flex: 1, padding: "7px 0", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 600,
+              flex: 1, padding: "7px 0", border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600,
               background: tab === k ? "#fff" : "transparent", color: tab === k ? "#1a1a1a" : "#888",
               cursor: "pointer", fontFamily: "inherit",
+              boxShadow: tab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
             }}>{lbl}</button>
           ))}
         </div>
       </div>
 
       {tab === "history" && <StockHistory templates={allTemplates} />}
+      {tab === "logs" && <SubmittedLogsView logs={myLogs} />}
 
       {tab === "checklist" && (
         <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 16px 22px" }}>
+
+          {/* Checklists overall progress bar */}
+          {allTemplates.length > 0 && (
+            <div style={{ background: "#fff", border: "1.5px solid #EBEBEB", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "#888" }}>Today's Checklists</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: submittedCount === allTemplates.length ? "#2d9e2d" : "#1a1a1a" }}>
+                  {submittedCount}/{allTemplates.length} submitted {submittedCount === allTemplates.length ? "✓" : ""}
+                </span>
+              </div>
+              <div style={{ height: 7, background: "#F0F0F0", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${allTemplates.length > 0 ? (submittedCount / allTemplates.length) * 100 : 0}%`, background: submittedCount === allTemplates.length ? "#2d9e2d" : "#2980b9", borderRadius: 3, transition: "width 0.4s ease" }} />
+              </div>
+            </div>
+          )}
+
           {allTemplates.length > 1 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 8 }}>SELECT CHECKLIST</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {allTemplates.map(t => (
-                  <button key={t.id} onClick={() => { setSelectedId(t.id); setValues({}); setErrors({}); }} style={{
-                    padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                    border: "1.5px solid " + (selectedId === t.id ? "#000" : "#E8E8E8"),
-                    background: selectedId === t.id ? "#000" : "#fff",
-                    color: selectedId === t.id ? "#fff" : "#555", cursor: "pointer", fontFamily: "inherit",
-                  }}>{t.name}</button>
-                ))}
+                {allTemplates.map(t => {
+                  const done = !!submittedIds[t.id];
+                  return (
+                    <button key={t.id} onClick={() => { setSelectedId(t.id); setValues({}); setErrors({}); }} style={{
+                      padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      border: "1.5px solid " + (done ? "#2d9e2d" : selectedId === t.id ? "#000" : "#E8E8E8"),
+                      background: done ? "#2d9e2d18" : selectedId === t.id ? "#000" : "#fff",
+                      color: done ? "#2d9e2d" : selectedId === t.id ? "#fff" : "#555",
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}>{done ? "✓ " : ""}{t.name}</button>
+                  );
+                })}
               </div>
             </div>
           )}
 
           {template ? (
-            <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #EBEBEB", overflow: "hidden" }}>
-              <div style={{ background: "#111", padding: "18px 20px 16px" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>{template.recurrence} -- {template.time}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{template.name}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 3 }}>{template.fields.length} fields</div>
+            <div style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${isSubmitted ? "#2d9e2d" : "#EBEBEB"}`, overflow: "hidden" }}>
+              <div style={{ background: isSubmitted ? "#2d9e2d" : "#111", padding: "18px 20px 16px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>{recurrenceLabel(template)} · {template.time}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{template.name}</div>
+                  {isSubmitted && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>✓ Submitted</span>}
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{template.fields.length} fields</div>
               </div>
+              <ProgressBar fields={template.fields} values={values} />
               <div style={{ padding: 18 }}>
-                {template.fields.map(field => (
+                {template.fields.map((field, idx) => (
                   <div key={field.id} style={{ marginBottom: 18, padding: "14px 15px", border: "1.5px solid " + (errors[field.id] ? "#ffcccc" : "#EBEBEB"), borderRadius: 11, background: errors[field.id] ? "#FFFAFA" : "#fff" }}>
-                    <label style={{ ...S.label, marginBottom: 10 }}>
-                      {field.label || "Untitled field"}
+                    <label style={{ ...S.label, marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#bbb", marginRight: 6 }}>{idx + 1}.</span>{field.label || "Untitled field"}
                       {field.required && <span style={{ color: "#ff4444" }}> *</span>}
+                      {(field.subTasks || []).length > 0 && (
+                        <span style={{ fontSize: 10, color: "#888", fontWeight: 400, marginLeft: 6 }}>
+                          ({Object.values(values[field.id + "_sub"] || {}).filter(Boolean).length}/{field.subTasks.length} steps)
+                        </span>
+                      )}
                     </label>
+                    {/* Reference photo from admin */}
+                    {field.referencePhoto && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#4a90d9", letterSpacing: "0.05em", marginBottom: 5 }}>REFERENCE PHOTO</div>
+                        <img src={field.referencePhoto} alt="reference" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 9, border: "1.5px solid #D5E8FF" }} />
+                        <div style={{ fontSize: 10.5, color: "#888", marginTop: 4 }}>Use this as a guide when completing this task</div>
+                      </div>
+                    )}
+                    {/* Require photo capture badge */}
+                    {field.requirePhoto && (
+                      <div style={{ marginBottom: 8, padding: "6px 10px", background: "#FFF8F0", border: "1px solid #FFD5A0", borderRadius: 7, fontSize: 11, color: "#e67e22", fontWeight: 600 }}>
+                        📷 Photo capture required for this field
+                      </div>
+                    )}
                     {field.type === "toggle" && <ToggleField field={field} value={values[field.id]} onChange={v => setValue(field.id, v)} />}
                     {field.type === "text" && (
                       field.multiline
@@ -419,10 +642,17 @@ export default function StaffView({ templates, onSubmit }) {
                       </select>
                     )}
                     {field.type === "signature" && <SignatureField field={field} value={values[field.id]} onChange={v => setValue(field.id, v)} />}
-                    {errors[field.id] && <div style={{ fontSize: 11.5, color: "#cc3333", marginTop: 7 }}>-- {errors[field.id]}</div>}
+                    <SubTasks subTasks={field.subTasks} fieldId={field.id} values={values} onChange={setValue} />
+                    {errors[field.id] && <div style={{ fontSize: 11.5, color: "#cc3333", marginTop: 7 }}>⚠ {errors[field.id]}</div>}
                   </div>
                 ))}
-                <button onClick={handleSubmit} style={{ width: "100%", padding: "13px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 }}>Submit Log</button>
+                {isSubmitted ? (
+                  <div style={{ width: "100%", padding: "13px 0", background: "#2d9e2d18", border: "1.5px solid #2d9e2d35", borderRadius: 10, color: "#2d9e2d", fontSize: 14, fontWeight: 700, textAlign: "center", marginTop: 4 }}>
+                    ✓ Checklist Submitted
+                  </div>
+                ) : (
+                  <button onClick={handleSubmit} style={{ width: "100%", padding: "13px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 }}>Submit Log ✓</button>
+                )}
               </div>
             </div>
           ) : (

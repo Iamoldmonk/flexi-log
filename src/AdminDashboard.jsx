@@ -24,7 +24,7 @@ function LogRow({ log, expanded, onToggle }) {
           <div style={{ width: 34, height: 34, borderRadius: 8, background: "#F0F0F0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>📋</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{log.templateName}</div>
-            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{log.submittedAtDisplay || log.submittedAt}</div>
+            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{log.submittedAt}</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -141,7 +141,7 @@ export default function AdminDashboard({ logs, templates }) {
 
   const filteredLogs = logs.filter(l =>
     l.templateName.toLowerCase().includes(search.toLowerCase()) ||
-    (l.submittedAtDisplay || l.submittedAt || "").toLowerCase().includes(search.toLowerCase())
+    l.submittedAt.toLowerCase().includes(search.toLowerCase())
   );
 
   const totalFields = logs.reduce((acc, l) => acc + l.fields.length, 0);
