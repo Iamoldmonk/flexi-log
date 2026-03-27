@@ -123,3 +123,39 @@ export function useRoles() {
 
   return [roles, saveRole, removeRole, loading];
 }
+
+/**
+ * Real-time sync for outlets collection.
+ * Returns [outlets, saveOutlet, deleteOutlet, loading]
+ */
+export function useOutlets() {
+  const [outlets, setOutlets] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "outlets"), (snap) => {
+      const docs = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
+      setOutlets(docs);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const saveOutlet = useCallback(async (outlet) => {
+    const { _docId, ...data } = outlet;
+    if (_docId) {
+      await setDoc(doc(db, "outlets", _docId), data, { merge: true });
+    } else {
+      await addDoc(collection(db, "outlets"), {
+        ...data,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }, []);
+
+  const removeOutlet = useCallback(async (docId) => {
+    await deleteDoc(doc(db, "outlets", docId));
+  }, []);
+
+  return [outlets, saveOutlet, removeOutlet, loading];
+}

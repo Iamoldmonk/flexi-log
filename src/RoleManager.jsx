@@ -18,13 +18,13 @@ const S = {
   },
 };
 
-export default function RoleManager({ roles = [], templates = [], onSaveRole, onDeleteRole }) {
+export default function RoleManager({ roles = [], templates = [], outlets = [], onSaveRole, onDeleteRole }) {
   const [editingRole, setEditingRole] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: "", password: "", assignedChecklists: [] });
 
   const handleNewRole = () => {
-    setFormData({ name: "", password: "", assignedChecklists: [] });
+    setFormData({ name: "", password: "", assignedChecklists: [], assignedOutlets: [] });
     setEditingRole(null);
     setShowForm(true);
   };
@@ -34,6 +34,7 @@ export default function RoleManager({ roles = [], templates = [], onSaveRole, on
       name: role.name,
       password: role.password,
       assignedChecklists: role.assignedChecklists || [],
+      assignedOutlets: role.assignedOutlets || [],
     });
     setEditingRole(role._docId);
     setShowForm(true);
@@ -62,6 +63,15 @@ export default function RoleManager({ roles = [], templates = [], onSaveRole, on
       assignedChecklists: prev.assignedChecklists.includes(checklistId)
         ? prev.assignedChecklists.filter(id => id !== checklistId)
         : [...prev.assignedChecklists, checklistId],
+    }));
+  };
+
+  const toggleOutlet = (outletId) => {
+    setFormData(prev => ({
+      ...prev,
+      assignedOutlets: prev.assignedOutlets.includes(outletId)
+        ? prev.assignedOutlets.filter(id => id !== outletId)
+        : [...prev.assignedOutlets, outletId],
     }));
   };
 
@@ -99,6 +109,27 @@ export default function RoleManager({ roles = [], templates = [], onSaveRole, on
               placeholder="Enter password for this role"
               style={S.input}
             />
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={S.label}>Assigned Outlets</label>
+            <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 8, padding: 12, background: "#fff", maxHeight: 150, overflowY: "auto", marginBottom: 14 }}>
+              {outlets && outlets.length > 0 ? (
+                outlets.map(outlet => (
+                  <label key={outlet._docId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F0F0F0", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.assignedOutlets.includes(outlet._docId)}
+                      onChange={() => toggleOutlet(outlet._docId)}
+                      style={{ width: 16, height: 16, cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: 12 }}>{outlet.name}</span>
+                  </label>
+                ))
+              ) : (
+                <div style={{ fontSize: 12, color: "#aaa" }}>No outlets available. Create outlets first.</div>
+              )}
+            </div>
           </div>
 
           <div style={{ marginBottom: 16 }}>
@@ -147,6 +178,20 @@ export default function RoleManager({ roles = [], templates = [], onSaveRole, on
                     }
                   }} style={{ ...S.btn, background: "#E0553F", padding: "6px 12px", fontSize: 11 }}>Delete</button>
                 </div>
+              </div>
+
+              <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>
+                <strong>Assigned Outlets:</strong>
+                {role.assignedOutlets && role.assignedOutlets.length > 0 ? (
+                  <ul style={{ marginTop: 6, paddingLeft: 20 }}>
+                    {role.assignedOutlets.map(outletId => {
+                      const outlet = outlets?.find(o => o._docId === outletId);
+                      return <li key={outletId}>{outlet?.name || outletId}</li>;
+                    })}
+                  </ul>
+                ) : (
+                  <div style={{ marginTop: 6, color: "#aaa" }}>No outlets assigned</div>
+                )}
               </div>
 
               <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>
