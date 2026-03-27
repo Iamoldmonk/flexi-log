@@ -549,7 +549,16 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
     [arr[i], arr[j]] = [arr[j], arr[i]];
     updateActive({ fields: arr });
   };
-  const addTemplate = () => { const t = emptyTemplate(); setTemplates(ts => [...ts, t]); setActiveId(t.id); setMode("builder"); };
+  const addTemplate = () => {
+    // Ensure new template has a unique ID
+    let t = emptyTemplate();
+    while (templates.some(existing => existing.id === t.id)) {
+      t = emptyTemplate();
+    }
+    setTemplates(ts => [...ts, t]);
+    setActiveId(t.id);
+    setMode("builder");
+  };
   const deleteTemplate = (id) => {
     if (templates.length === 1) return;
     const rem = templates.filter(t => t.id !== id);

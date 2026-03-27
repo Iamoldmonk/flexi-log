@@ -35,7 +35,7 @@ export function useTemplates() {
     const currentDocIds = new Set(
       (templates || []).map((t) => t._docId).filter(Boolean)
     );
-    const newIds = new Set(newTemplates.map((t) => t._docId).filter(Boolean));
+    const newIds = new Set(newTemplates.map((t) => t._docId || t.id).filter(Boolean));
 
     // Delete removed templates
     for (const docId of currentDocIds) {
@@ -46,13 +46,10 @@ export function useTemplates() {
 
     // Upsert each template
     for (const t of newTemplates) {
-      const { _docId, ...data } = t;
-      if (_docId) {
-        await setDoc(doc(db, "templates", _docId), data);
-      } else {
-        // New template — use its id as the doc ID for consistency
-        await setDoc(doc(db, "templates", data.id), data);
-      }
+      const { _docId, id, ...data } = t;
+      // Use _docId if it exists (from Firestore), otherwise use id as doc ID
+      const docId = _docId || id;
+      await setDoc(doc(db, "templates", docId), { ...data, id });
     }
   }, [templates]);
 

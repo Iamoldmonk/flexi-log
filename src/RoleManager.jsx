@@ -51,10 +51,11 @@ export default function RoleManager({ roles = [], templates = [], outlets = [], 
       name: formData.name,
       password: formData.password,
       assignedChecklists: formData.assignedChecklists,
+      assignedOutlets: formData.assignedOutlets,
     });
 
     setShowForm(false);
-    setFormData({ name: "", password: "", assignedChecklists: [] });
+    setFormData({ name: "", password: "", assignedChecklists: [], assignedOutlets: [] });
   };
 
   const toggleChecklist = (checklistId) => {
