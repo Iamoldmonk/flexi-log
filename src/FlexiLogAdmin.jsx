@@ -1,4 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < breakpoint);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, [breakpoint]);
+  return isMobile;
+}
 import AdminDashboard from "./AdminDashboard";
 import RoleManager from "./RoleManager";
 import OutletManager from "./OutletManager";
@@ -19,7 +29,7 @@ const FIELD_TYPES = [
 const RECURRENCE = ["None", "Hourly", "Every X Hours", "Daily", "Weekdays", "Mon / Wed / Fri", "Every X Days", "Weekly", "Fortnightly", "Monthly", "Last Weekday of Month", "Custom"];
 const INVENTORY_ITEMS = ["— None —", "Coconuts", "Milk (L)", "Oil (L)", "Sugar (kg)", "Packaging"];
 
-let _id = 100;
+let _id = Date.now();
 const uid = () => String(_id++);
 
 const defaultField = (typeId) => ({
@@ -386,53 +396,62 @@ function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast }) {
 }
 
 // ─── Templates Sidebar ─────────────────────────────────────────────────────────
-function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete }) {
+function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete, isMobile }) {
+  if (isMobile) {
+    return (
+      <div style={{ background: "#fff", border: "1.5px solid #EBEBEB", borderRadius: 14, padding: "10px 12px", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>TEMPLATES · {templates.length}</div>
+          <button onClick={onNew} style={{ padding: "4px 10px", border: "1.5px dashed #D8D8D8", borderRadius: 7, background: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#888", fontFamily: "inherit" }}>+ New</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
+          {templates.map(t => (
+            <div key={t.id} onClick={() => onSelect(t.id)} style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", flexShrink: 0, background: t.id === activeId ? "#000" : "#F5F5F5", display: "flex", alignItems: "center", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{t.name || "Untitled"}</div>
+                <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
+              </div>
+              {templates.length > 1 && t.id !== activeId && (
+                <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{ width: 18, height: 18, border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0 }}>✕</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  // Desktop: vertical sidebar
   return (
     <div style={{ width: 210, flexShrink: 0, background: "#fff", border: "1.5px solid #EBEBEB", borderRadius: 14, padding: 14, position: "sticky", top: 68, height: "fit-content" }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 10 }}>
-        TEMPLATES · {templates.length}
-      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 10 }}>TEMPLATES · {templates.length}</div>
       {templates.map(t => (
-        <div key={t.id} onClick={() => onSelect(t.id)} style={{
-          padding: "9px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 4,
-          background: t.id === activeId ? "#000" : "transparent",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}
+        <div key={t.id} onClick={() => onSelect(t.id)} style={{ padding: "9px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 4, background: t.id === activeId ? "#000" : "transparent", display: "flex", alignItems: "center", justifyContent: "space-between" }}
           onMouseEnter={e => { if (t.id !== activeId) e.currentTarget.style.background = "#F5F5F5"; }}
           onMouseLeave={e => { if (t.id !== activeId) e.currentTarget.style.background = "transparent"; }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {t.name || "Untitled"}
-            </div>
-            <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>
-              {t.fields.length} field{t.fields.length !== 1 ? "s" : ""}
-            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name || "Untitled"}</div>
+            <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
           </div>
           {templates.length > 1 && t.id !== activeId && (
-            <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{
-              width: 18, height: 18, border: "none", background: "none",
-              cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0,
-            }}>✕</button>
+            <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{ width: 18, height: 18, border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0 }}>✕</button>
           )}
         </div>
       ))}
-      <button onClick={onNew} style={{
-        width: "100%", marginTop: 8, padding: "8px 0",
-        border: "1.5px dashed #D8D8D8", borderRadius: 8, background: "none",
-        cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#888", fontFamily: "inherit",
-      }}>+ New Template</button>
+      <button onClick={onNew} style={{ width: "100%", marginTop: 8, padding: "8px 0", border: "1.5px dashed #D8D8D8", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#888", fontFamily: "inherit" }}>+ New Template</button>
     </div>
   );
 }
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 function Preview({ template }) {
-  const { name, recurrence, time, fields } = template;
+  if (!template) return <div style={{ textAlign: "center", padding: 40, color: "#ccc", fontSize: 13 }}>Select a template to preview</div>;
+  const { name, recurrence, time, startDate, fields } = template;
+  const recLabel = typeof recurrence === "string" ? recurrence : (recurrence?.quick || "Every day");
   return (
     <div style={{ maxWidth: 400, margin: "0 auto" }}>
       <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #EBEBEB", overflow: "hidden", boxShadow: "0 6px 28px rgba(0,0,0,0.07)" }}>
         <div style={{ background: "#111", padding: "18px 20px 16px" }}>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>{recurrence} · {time}</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>{recLabel} · {startDate || ""} · {time}</div>
           <div style={{ fontSize: 17, fontWeight: 700, color: "#fff" }}>{name || "Untitled Checklist"}</div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 3 }}>{fields.length} fields · Staff view</div>
         </div>
@@ -518,17 +537,31 @@ const emptyRecurrence = () => ({
   endsAfter: 1,
   autoReset: "schedule",   // schedule|completion
 });
-const emptyTemplate = () => ({ id: uid(), name: "", time: "08:00", recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, fields: [] });
+const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, fields: [] });
 
 export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange }) {
-  const initTemplates = externalTemplates || [emptyTemplate()];
+  // Normalize: ensure every template has an `id` field (Firestore uses _docId)
+  const initTemplates = (externalTemplates || [emptyTemplate()]).map(t => ({ ...t, id: t.id || t._docId || uid() }));
   const [templates, setTemplatesLocal] = useState(initTemplates);
-  const [activeId, setActiveId] = useState(initTemplates[0].id);
+  const [activeId, setActiveId] = useState(initTemplates[0]?.id);
   const [mode, setMode] = useState("builder"); // builder | preview | dashboard | roles | outlets
   const [toast, setToast] = useState(null);
   const [selectedOutlet, setSelectedOutlet] = useState(""); // Outlet filter for templates
   const [roles, saveRole, deleteRole] = useRoles();
   const [outlets, saveOutlet, deleteOutlet] = useOutlets();
+  const isMobile = useIsMobile();
+
+  // Sync when externalTemplates changes (Firestore load)
+  useEffect(() => {
+    if (externalTemplates && externalTemplates.length > 0) {
+      const normalized = externalTemplates.map(t => ({ ...t, id: t.id || t._docId || uid() }));
+      setTemplatesLocal(normalized);
+      setActiveId(prev => {
+        if (normalized.find(t => t.id === prev)) return prev;
+        return normalized[0].id;
+      });
+    }
+  }, [externalTemplates]);
 
   const setTemplates = (updater) => {
     setTemplatesLocal(prev => {
@@ -543,7 +576,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
     ? templates.filter(t => t.outletId === selectedOutlet)
     : templates;
 
-  const active = templates.find(t => t.id === activeId);
+  const active = templates.find(t => t.id === activeId) || templates[0];
   const updateActive = (patch) => setTemplates(ts => ts.map(t => t.id === activeId ? { ...t, ...patch } : t));
   const addField = (type) => updateActive({ fields: [...active.fields, defaultField(type.id)] });
   const updateField = (id, patch) => updateActive({ fields: active.fields.map(f => f.id === id ? { ...f, ...patch } : f) });
@@ -589,6 +622,27 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
     setTemplates(rem);
     if (activeId === id) setActiveId(rem[0].id);
   };
+  const duplicateTemplate = () => {
+    if (!active) return;
+    const { _docId, ...rest } = active;
+    const dup = { ...rest, id: uid(), name: (active.name || "Untitled") + " (copy)", fields: active.fields.map(f => ({ ...f, id: uid() })) };
+    setTemplates(ts => [...ts, dup]);
+    setActiveId(dup.id);
+    setToast("Template duplicated"); setTimeout(() => setToast(null), 2500);
+  };
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyTargets, setCopyTargets] = useState([]);
+  const copyToOutlets = () => {
+    if (!active || copyTargets.length === 0) return;
+    const newOnes = copyTargets.map(outletId => {
+      const { _docId, ...rest } = active;
+      return { ...rest, id: uid(), outletId, fields: active.fields.map(f => ({ ...f, id: uid() })) };
+    });
+    setTemplates(ts => [...ts, ...newOnes]);
+    setShowCopyModal(false);
+    setCopyTargets([]);
+    setToast(`Copied to ${newOnes.length} outlet${newOnes.length > 1 ? "s" : ""}`); setTimeout(() => setToast(null), 2500);
+  };
   const saveAll = () => { setToast("All templates saved"); setTimeout(() => setToast(null), 2500); };
 
   return (
@@ -600,41 +654,66 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
         button { font-family: inherit; }
       `}</style>
 
-      <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid #EBEBEB", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 22, height: 22, background: "#000", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>FL</span>
+      {/* ── NAVBAR ── */}
+      {isMobile ? (
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid #EBEBEB" }}>
+          <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <div style={{ width: 22, height: 22, background: "#000", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>FL</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
+              <span style={{ color: "#ddd" }}>›</span>
+              <span style={{ fontSize: 12, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active?.name || "Admin"}</span>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+              {toast && <span style={{ fontSize: 11, color: "#2d9e2d", fontWeight: 600 }}>✓ {toast}</span>}
+              {mode !== "roles" && mode !== "outlets" && (
+                <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} style={{ padding: "4px 6px", border: "1.5px solid #E8E8E8", borderRadius: 7, fontSize: 11, fontWeight: 600, background: "#fff", cursor: "pointer", maxWidth: 110 }}>
+                  <option value="">All Outlets</option>
+                  {outlets && outlets.map(o => <option key={o._docId} value={o._docId}>{o.name}</option>)}
+                </select>
+              )}
+              {mode === "builder" && <button onClick={saveAll} style={{ padding: "5px 12px", border: "none", borderRadius: 7, background: "#000", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#fff" }}>Save</button>}
+              {onLogout && <button onClick={onLogout} style={{ padding: "5px 10px", border: "1.5px solid #E0E0E0", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#555" }}>Out</button>}
+            </div>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
-          <span style={{ color: "#ddd" }}>›</span>
-          <span style={{ fontSize: 12, color: "#888" }}>Admin</span>
-          <span style={{ color: "#ddd" }}>›</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active?.name || "New Checklist"}</span>
-        </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {toast && <span style={{ fontSize: 11.5, color: "#2d9e2d", fontWeight: 600 }}>✓ {toast}</span>}
-          {mode !== "roles" && mode !== "outlets" && (
-            <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} style={{ padding: "5px 10px", border: "1.5px solid #E8E8E8", borderRadius: 7, fontSize: 11.5, fontWeight: 600, background: "#fff", cursor: "pointer" }}>
-              <option value="">All Outlets</option>
-              {outlets && outlets.map(o => (
-                <option key={o._docId} value={o._docId}>{o.name}</option>
-              ))}
-            </select>
-          )}
-          <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
-            {[["builder", "Builder"], ["preview", "Preview"], ["dashboard", `Dashboard${logs.length > 0 ? " (" + logs.length + ")" : ""}`], ["roles", "Roles"], ["outlets", "Outlets"]].map(([m, lbl]) => (
-              <button key={m} onClick={() => setMode(m)} style={{
-                padding: "5px 11px", border: "none", borderRadius: 6, fontSize: 11.5, fontWeight: 600,
-                background: mode === m ? "#fff" : "transparent",
-                color: mode === m ? "#1a1a1a" : "#888", cursor: "pointer", fontFamily: "inherit",
-                boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              }}>{lbl}</button>
+          <div style={{ display: "flex", gap: 3, background: "#F2F2F2", padding: 3, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            {[["builder", "Builder"], ["preview", "Preview"], ["dashboard", `Logs${logs.length > 0 ? " (" + logs.length + ")" : ""}`], ["roles", "Roles"], ["outlets", "Outlets"]].map(([m, lbl]) => (
+              <button key={m} onClick={() => setMode(m)} style={{ padding: "6px 12px", border: "none", borderRadius: 6, fontSize: 11.5, fontWeight: 600, background: mode === m ? "#fff" : "transparent", color: mode === m ? "#1a1a1a" : "#888", cursor: "pointer", fontFamily: "inherit", boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none", whiteSpace: "nowrap", flex: 1 }}>{lbl}</button>
             ))}
           </div>
-          {mode === "builder" && <button onClick={saveAll} style={{ padding: "6px 15px", border: "none", borderRadius: 7, background: "#000", cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "#fff" }}>Save All</button>}
-          {onLogout && <button onClick={onLogout} style={{ padding: "6px 13px", border: "1.5px solid #E0E0E0", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "#555" }}>Sign Out</button>}
         </div>
-      </div>
+      ) : (
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid #EBEBEB", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 22, height: 22, background: "#000", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>FL</span>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
+            <span style={{ color: "#ddd" }}>›</span>
+            <span style={{ fontSize: 12, color: "#888" }}>Admin</span>
+            <span style={{ color: "#ddd" }}>›</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active?.name || "New Checklist"}</span>
+          </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {toast && <span style={{ fontSize: 11.5, color: "#2d9e2d", fontWeight: 600 }}>✓ {toast}</span>}
+            {mode !== "roles" && mode !== "outlets" && (
+              <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} style={{ padding: "5px 10px", border: "1.5px solid #E8E8E8", borderRadius: 7, fontSize: 11.5, fontWeight: 600, background: "#fff", cursor: "pointer" }}>
+                <option value="">All Outlets</option>
+                {outlets && outlets.map(o => <option key={o._docId} value={o._docId}>{o.name}</option>)}
+              </select>
+            )}
+            <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
+              {[["builder", "Builder"], ["preview", "Preview"], ["dashboard", `Dashboard${logs.length > 0 ? " (" + logs.length + ")" : ""}`], ["roles", "Roles"], ["outlets", "Outlets"]].map(([m, lbl]) => (
+                <button key={m} onClick={() => setMode(m)} style={{ padding: "5px 11px", border: "none", borderRadius: 6, fontSize: 11.5, fontWeight: 600, background: mode === m ? "#fff" : "transparent", color: mode === m ? "#1a1a1a" : "#888", cursor: "pointer", fontFamily: "inherit", boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>{lbl}</button>
+              ))}
+            </div>
+            {mode === "builder" && <button onClick={saveAll} style={{ padding: "6px 15px", border: "none", borderRadius: 7, background: "#000", cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "#fff" }}>Save All</button>}
+            {onLogout && <button onClick={onLogout} style={{ padding: "6px 13px", border: "1.5px solid #E0E0E0", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "#555" }}>Sign Out</button>}
+          </div>
+        </div>
+      )}
 
       {mode === "dashboard" && <AdminDashboard logs={logs} templates={templates} />}
 
@@ -642,13 +721,21 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
 
       {mode === "outlets" && <OutletManager outlets={outlets} onSaveOutlet={saveOutlet} onDeleteOutlet={deleteOutlet} />}
 
-      {mode !== "dashboard" && mode !== "roles" && mode !== "outlets" && <div style={{ display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
-        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} />
+      {mode !== "dashboard" && mode !== "roles" && mode !== "outlets" && <div style={isMobile ? { maxWidth: 1020, margin: "0 auto", padding: "12px 10px" } : { display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
+        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} isMobile={isMobile} />
 
         {mode === "builder" ? (
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #EBEBEB", padding: 18, marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 14 }}>CHECKLIST SETTINGS</div>
+            <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #EBEBEB", padding: isMobile ? "14px 12px" : 18, marginBottom: isMobile ? 10 : 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>CHECKLIST SETTINGS</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={duplicateTemplate} style={{ padding: "4px 10px", border: "1.5px solid #E8E8E8", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#555", fontFamily: "inherit" }}>⧉ Duplicate</button>
+                  {outlets && outlets.length > 0 && (
+                    <button onClick={() => { setCopyTargets([]); setShowCopyModal(true); }} style={{ padding: "4px 10px", border: "1.5px solid #E8E8E8", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#555", fontFamily: "inherit" }}>📋 Copy to Outlets</button>
+                  )}
+                </div>
+              </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={S.label}>Template Name</label>
                 <input value={active.name} onChange={e => updateActive({ name: e.target.value })} placeholder="e.g. Coconut Milk Production"
@@ -763,8 +850,13 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                   );
                 })()}
               </div>
-              {/* Start time */}
+              {/* Start date & time */}
               <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={S.label}>Start Date</label>
+                  <input type="date" value={active.startDate || ""} onChange={e => updateActive({ startDate: e.target.value })} style={S.input}
+                    onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
+                </div>
                 <div style={{ flex: 1 }}>
                   <label style={S.label}>Start Time</label>
                   <input type="time" value={active.time} onChange={e => updateActive({ time: e.target.value })} style={S.input}
@@ -806,7 +898,19 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
           <div style={{ flex: 1 }}><Preview template={active} /></div>
         )}
 
-        {mode === "builder" && (
+        {mode === "builder" && (isMobile ? (
+          <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #EBEBEB", padding: "10px 12px", marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 8 }}>ADD FIELD</div>
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
+              {FIELD_TYPES.map(type => (
+                <button key={type.id} onClick={() => addField(type)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", border: "1.5px solid #EBEBEB", borderRadius: 9, background: "#fff", cursor: "pointer", textAlign: "left", flexShrink: 0 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: "#F5F5F5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{type.icon}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#1a1a1a", whiteSpace: "nowrap" }}>{type.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
           <div style={{ width: 205, flexShrink: 0, position: "sticky", top: 68 }}>
             <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #EBEBEB", padding: 14, marginBottom: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 10 }}>ADD FIELD</div>
@@ -835,8 +939,36 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
               </div>
             )}
           </div>
-        )}
+        ))}
       </div>}
+
+      {/* Copy to Outlets Modal */}
+      {showCopyModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center", padding: isMobile ? 0 : 16 }}
+          onClick={() => setShowCopyModal(false)}>
+          <div style={{ background: "#fff", borderRadius: isMobile ? "18px 18px 0 0" : 16, padding: isMobile ? "20px 16px 28px" : "24px 28px", width: "100%", maxWidth: isMobile ? "100%" : 360, boxShadow: "0 12px 48px rgba(0,0,0,0.15)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a", marginBottom: 4 }}>Copy to Outlets</div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>Select outlets to copy "{active?.name || "Untitled"}" to:</div>
+            <div style={{ maxHeight: 240, overflowY: "auto", marginBottom: 16 }}>
+              {outlets.map(o => {
+                const checked = copyTargets.includes(o._docId);
+                return (
+                  <label key={o._docId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 9, cursor: "pointer", marginBottom: 4, background: checked ? "#F0F0F0" : "#FAFAFA", border: `1.5px solid ${checked ? "#000" : "#EBEBEB"}` }}>
+                    <input type="checkbox" checked={checked} onChange={() => setCopyTargets(prev => checked ? prev.filter(id => id !== o._docId) : [...prev, o._docId])}
+                      style={{ accentColor: "#000", width: 15, height: 15 }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{o.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setShowCopyModal(false)} style={{ flex: 1, padding: "10px 0", border: "1.5px solid #E0E0E0", borderRadius: 9, background: "#fff", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#666", fontFamily: "inherit" }}>Cancel</button>
+              <button onClick={copyToOutlets} disabled={copyTargets.length === 0} style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 9, background: copyTargets.length > 0 ? "#000" : "#ccc", cursor: copyTargets.length > 0 ? "pointer" : "default", fontSize: 12.5, fontWeight: 700, color: "#fff", fontFamily: "inherit" }}>Copy ({copyTargets.length})</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -56,7 +56,9 @@ export function useTemplates(outletId = null) {
       const { _docId, id, ...data } = t;
       // Use _docId if it exists (from Firestore), otherwise use id as doc ID
       const docId = _docId || id;
-      await setDoc(doc(db, "templates", docId), { ...data, id, outletId: currentOutletId });
+      // Preserve template's own outletId (e.g. from copy-to-outlet), fall back to current filter
+      const effectiveOutletId = t.outletId !== undefined ? t.outletId : currentOutletId;
+      await setDoc(doc(db, "templates", docId), { ...data, id, outletId: effectiveOutletId });
     }
   }, [templates, outletId]);
 

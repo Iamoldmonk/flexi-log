@@ -1,4 +1,10 @@
 import { useState, useEffect } from "react";
+
+function useIsMobile(bp = 768) {
+  const [m, setM] = useState(typeof window !== "undefined" && window.innerWidth < bp);
+  useEffect(() => { const h = () => setM(window.innerWidth < bp); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, [bp]);
+  return m;
+}
 import FlexiLogAdmin from "./FlexiLogAdmin";
 import StaffView from "./StaffView";
 import SubmittedLogs from "./SubmittedLogs";
@@ -63,6 +69,7 @@ export default function App() {
   const [rolePassword, setRolePassword] = useState("");
   const [error, setError] = useState("");
   const [staffTab, setStaffTab] = useState("checklist"); // 'checklist' | 'logs'
+  const isMobile = useIsMobile();
   // Real-time Firestore sync for templates, logs & roles
   const [templates, setTemplates, templatesLoading] = useTemplates();
   const [logs, addLog, logsLoading] = useLogs();
@@ -240,32 +247,45 @@ export default function App() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap'); * { box-sizing: border-box; margin: 0; padding: 0; } button { font-family: inherit; }`}</style>
 
       {/* Topbar */}
-      <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid #EBEBEB", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 22, height: 22, background: "#000", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>FL</span>
+      {isMobile ? (
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid #EBEBEB" }}>
+          <div style={{ height: 46, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 22, height: 22, background: "#000", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>FL</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{role?.name || "Staff"}</span>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
+                {[["checklist", "📋"], ["logs", "📁"]].map(([k, icon]) => (
+                  <button key={k} onClick={() => setStaffTab(k)} style={{ padding: "5px 10px", border: "none", borderRadius: 6, fontSize: 13, background: staffTab === k ? "#fff" : "transparent", cursor: "pointer", boxShadow: staffTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>{icon}</button>
+                ))}
+              </div>
+              <button onClick={logout} style={{ padding: "5px 10px", border: "1.5px solid #E0E0E0", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#555" }}>Out</button>
+            </div>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
-          <span style={{ color: "#ddd" }}>›</span>
-          <span style={{ fontSize: 12, color: "#888" }}>{role?.name || "Staff"}</span>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {/* Tab switcher */}
-          <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
-            {[["checklist", "📋 Checklist"], ["logs", "📁 My Logs"]].map(([k, label]) => (
-              <button key={k} onClick={() => setStaffTab(k)} style={{
-                padding: "5px 12px", border: "none", borderRadius: 6, fontSize: 11.5, fontWeight: 600,
-                background: staffTab === k ? "#fff" : "transparent",
-                color: staffTab === k ? "#1a1a1a" : "#888", cursor: "pointer",
-                boxShadow: staffTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              }}>{label}</button>
-            ))}
+      ) : (
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid #EBEBEB", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 22, height: 22, background: "#000", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>FL</span>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Flexi-Log</span>
+            <span style={{ color: "#ddd" }}>›</span>
+            <span style={{ fontSize: 12, color: "#888" }}>{role?.name || "Staff"}</span>
           </div>
-          <button onClick={logout} style={{ padding: "6px 13px", border: "1.5px solid #E0E0E0", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "#555" }}>
-            Sign Out
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 3, background: "#F2F2F2", borderRadius: 8, padding: 3 }}>
+              {[["checklist", "📋 Checklist"], ["logs", "📁 My Logs"]].map(([k, label]) => (
+                <button key={k} onClick={() => setStaffTab(k)} style={{ padding: "5px 12px", border: "none", borderRadius: 6, fontSize: 11.5, fontWeight: 600, background: staffTab === k ? "#fff" : "transparent", color: staffTab === k ? "#1a1a1a" : "#888", cursor: "pointer", boxShadow: staffTab === k ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>{label}</button>
+              ))}
+            </div>
+            <button onClick={logout} style={{ padding: "6px 13px", border: "1.5px solid #E0E0E0", borderRadius: 7, background: "#fff", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "#555" }}>Sign Out</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {staffTab === "checklist"
         ? <StaffView templates={roleChecklists} onSubmit={addLogWithStaff} />
