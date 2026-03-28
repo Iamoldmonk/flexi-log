@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import FlexiLogAdmin from "./FlexiLogAdmin";
 import StaffView from "./StaffView";
 import SubmittedLogs from "./SubmittedLogs";
@@ -50,6 +50,13 @@ const S = {
 export default function App() {
   const [role, setRole] = useState(null); // null | 'admin' | staff
   const [loginAs, setLoginAs] = useState("staff"); // 'admin' | 'staff'
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
   const [password, setPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedOutlet, setSelectedOutlet] = useState("");
@@ -179,6 +186,19 @@ export default function App() {
         )}
 
         <button onClick={login} style={S.btn(true)}>Sign In</button>
+
+        {installPrompt && (
+          <button onClick={() => {
+            installPrompt.prompt();
+            installPrompt.userChoice.then(() => setInstallPrompt(null));
+          }} style={{
+            width: "100%", padding: "10px 0", border: "1.5px dashed #ccc", borderRadius: 9,
+            background: "transparent", color: "#888", fontSize: 12, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit", marginTop: 10,
+          }}>
+            📲 Install App
+          </button>
+        )}
 
         {loginAs === "staff" && (
           <div style={{ textAlign: "center", marginTop: 18, fontSize: 11, color: "#ccc" }}>
