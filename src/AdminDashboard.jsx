@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { getAllStock, isLowStock } from "./inventoryStore";
 
 const FIELD_ICONS = {
@@ -134,6 +134,179 @@ function InventoryOverview() {
   );
 }
 
+// ─── Cell value formatter ────────────────────────────────────────────────────
+function cellValue(field, log) {
+  const val = log.values[field.id];
+  if (val === undefined || val === null || val === "") return "—";
+  if (field.type === "toggle") return val === "yes" ? (field.yesLabel || "Done") : val === "no" ? (field.noLabel || "Skip") : "—";
+  if (field.type === "rating") return `${val}/${field.maxStars || 5}`;
+  if (field.type === "photo") return Array.isArray(val) ? `${val.length} photo(s)` : "—";
+  if (field.type === "signature") return val ? "Signed" : "—";
+  if (field.type === "number") return val + (field.unit ? ` ${field.unit}` : "");
+  return String(val);
+}
+
+// ─── Build table data from logs ─────────────────────────────────────────────
+function buildTableData(logs, filterTemplate) {
+  const filtered = filterTemplate ? logs.filter(l => l.templateName === filterTemplate) : logs;
+  // Collect all unique field labels across logs
+  const fieldMap = new Map();
+  filtered.forEach(log => {
+    (log.fields || []).forEach(f => {
+      if (!fieldMap.has(f.id)) fieldMap.set(f.id, f);
+    });
+  });
+  const columns = Array.from(fieldMap.values());
+  return { filtered, columns, fieldMap };
+}
+
+// ─── CSV export ─────────────────────────────────────────────────────────────
+function exportCSV(logs, columns) {
+  const esc = v => `"${String(v).replace(/"/g, '""')}"`;
+  const header = ["Checklist", "Submitted At", ...columns.map(c => c.label)];
+  const rows = logs.map(log =>
+    [log.templateName, log.submittedAt || log.submittedAtDisplay, ...columns.map(c => cellValue(c, log))]
+  );
+  const csv = [header, ...rows].map(r => r.map(esc).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `flexi-log-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ─── Google Sheets export (opens CSV in Google Sheets import) ───────────────
+function exportGoogleSheets(logs, columns) {
+  const esc = v => `"${String(v).replace(/"/g, '""')}"`;
+  const header = ["Checklist", "Submitted At", ...columns.map(c => c.label)];
+  const rows = logs.map(log =>
+    [log.templateName, log.submittedAt || log.submittedAtDisplay, ...columns.map(c => cellValue(c, log))]
+  );
+  const csv = [header, ...rows].map(r => r.map(esc).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `flexi-log-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  // After download, prompt user to import into Google Sheets
+  setTimeout(() => window.open("https://sheets.google.com/create", "_blank"), 500);
+}
+
+// ─── Spreadsheet Table View ─────────────────────────────────────────────────
+function LogTable({ logs, templates }) {
+  const templateNames = [...new Set(logs.map(l => l.templateName))];
+  const [filterTpl, setFilterTpl] = useState("");
+  const [sortCol, setSortCol] = useState("submittedAt");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const { filtered, columns } = useMemo(() => buildTableData(logs, filterTpl || null), [logs, filterTpl]);
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let va, vb;
+      if (sortCol === "submittedAt") {
+        va = a.submittedAt || ""; vb = b.submittedAt || "";
+      } else if (sortCol === "templateName") {
+        va = a.templateName; vb = b.templateName;
+      } else {
+        const field = columns.find(c => c.id === sortCol);
+        va = field ? cellValue(field, a) : "";
+        vb = field ? cellValue(field, b) : "";
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [filtered, sortCol, sortDir, columns]);
+
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const sortArrow = (col) => sortCol === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+
+  const thStyle = {
+    padding: "8px 12px", fontSize: 11, fontWeight: 700, color: "#555",
+    background: "#F5F5F5", borderBottom: "2px solid #E0E0E0", cursor: "pointer",
+    position: "sticky", top: 0, zIndex: 1, whiteSpace: "nowrap", textAlign: "left",
+    userSelect: "none", letterSpacing: "0.03em",
+  };
+  const tdStyle = {
+    padding: "7px 12px", fontSize: 12, color: "#1a1a1a", borderBottom: "1px solid #F0F0F0",
+    whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis",
+  };
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <select value={filterTpl} onChange={e => setFilterTpl(e.target.value)}
+          style={{ padding: "7px 10px", border: "1.5px solid #E8E8E8", borderRadius: 8, fontSize: 12, background: "#FAFAFA", fontFamily: "inherit", outline: "none" }}>
+          <option value="">All Checklists</option>
+          {templateNames.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => exportCSV(sorted, columns)} style={{
+          padding: "7px 14px", border: "1.5px solid #2d9e2d", borderRadius: 8, fontSize: 11, fontWeight: 700,
+          background: "#2d9e2d18", color: "#2d9e2d", cursor: "pointer", fontFamily: "inherit",
+        }}>Export CSV</button>
+        <button onClick={() => exportGoogleSheets(sorted, columns)} style={{
+          padding: "7px 14px", border: "1.5px solid #4285f4", borderRadius: 8, fontSize: 11, fontWeight: 700,
+          background: "#4285f418", color: "#4285f4", cursor: "pointer", fontFamily: "inherit",
+        }}>Open in Sheets</button>
+      </div>
+
+      <div style={{ fontSize: 11, color: "#aaa", marginBottom: 8 }}>{sorted.length} row(s)</div>
+
+      {/* Scrollable table */}
+      <div style={{ overflow: "auto", border: "1.5px solid #E8E8E8", borderRadius: 10, maxHeight: "60vh" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+          <thead>
+            <tr>
+              <th onClick={() => toggleSort("templateName")} style={thStyle}>Checklist{sortArrow("templateName")}</th>
+              <th onClick={() => toggleSort("submittedAt")} style={thStyle}>Submitted{sortArrow("submittedAt")}</th>
+              {columns.map(col => (
+                <th key={col.id} onClick={() => toggleSort(col.id)} style={thStyle}>
+                  {col.label}{sortArrow(col.id)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr><td colSpan={2 + columns.length} style={{ ...tdStyle, textAlign: "center", color: "#ccc", padding: 30 }}>No logs found</td></tr>
+            ) : sorted.map((log, idx) => (
+              <tr key={log.id || idx} style={{ background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                <td style={tdStyle}>{log.templateName}</td>
+                <td style={{ ...tdStyle, fontSize: 11, color: "#888" }}>{log.submittedAt || log.submittedAtDisplay}</td>
+                {columns.map(col => {
+                  const val = log.values[col.id];
+                  const display = cellValue(col, log);
+                  const isYes = col.type === "toggle" && val === "yes";
+                  const isNo = col.type === "toggle" && val === "no";
+                  return (
+                    <td key={col.id} style={{ ...tdStyle, color: isYes ? "#2d9e2d" : isNo ? "#999" : display === "—" ? "#ddd" : "#1a1a1a", fontWeight: isYes ? 700 : 400 }}>
+                      {col.type === "photo" && Array.isArray(val) && val.length > 0
+                        ? <div style={{ display: "flex", gap: 3 }}>{val.slice(0, 3).map((src, i) => <img key={i} src={src} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4 }} />)}</div>
+                        : col.type === "signature" && val
+                          ? <img src={val} alt="sig" style={{ height: 24, maxWidth: 80 }} />
+                          : display
+                      }
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard({ logs, templates }) {
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
@@ -160,7 +333,7 @@ export default function AdminDashboard({ logs, templates }) {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, background: "#EBEBEB", borderRadius: 9, padding: 3, marginBottom: 20 }}>
-        {[["overview", "Overview"], ["logs", `All Logs (${logs.length})`], ["inventory", `Inventory (${stockEntries.length})`]].map(([k, lbl]) => (
+        {[["overview", "Overview"], ["logs", `All Logs (${logs.length})`], ["table", "Table View"], ["inventory", `Inventory (${stockEntries.length})`]].map(([k, lbl]) => (
           <button key={k} onClick={() => setActiveTab(k)} style={{
             flex: 1, padding: "8px 0", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 600,
             background: activeTab === k ? "#fff" : "transparent",
@@ -223,6 +396,9 @@ export default function AdminDashboard({ logs, templates }) {
           ))}
         </div>
       )}
+
+      {/* TABLE VIEW TAB */}
+      {activeTab === "table" && <LogTable logs={logs} templates={templates} />}
 
       {/* INVENTORY TAB */}
       {activeTab === "inventory" && <InventoryOverview />}

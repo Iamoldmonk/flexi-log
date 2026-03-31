@@ -552,7 +552,7 @@ const emptyRecurrence = () => ({
   endsAfter: 1,
   autoReset: "schedule",   // schedule|completion
 });
-const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, fields: [] });
+const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, submitPolicy: "once", fields: [] });
 
 export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange }) {
   // Normalize: ensure every template has an `id` field (Firestore uses _docId)
@@ -889,6 +889,20 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                     <span style={{ fontSize: 12, color: "#666" }}>minutes past deadline</span>
                   </div>
                 )}
+              </div>
+              <div style={{ marginTop: 12, padding: "10px 12px", background: "#FAFAFA", borderRadius: 9, border: "1.5px solid #EBEBEB" }}>
+                <label style={S.label}>Submission Policy</label>
+                <select value={active.submitPolicy || "once"} onChange={e => updateActive({ submitPolicy: e.target.value })}
+                  style={S.input} onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"}>
+                  <option value="once">Once only — cannot resubmit</option>
+                  <option value="once_per_day">Once per day — resets daily</option>
+                  <option value="unlimited">Unlimited — can resubmit anytime</option>
+                </select>
+                <div style={{ fontSize: 10.5, color: "#aaa", marginTop: 2 }}>
+                  {(active.submitPolicy || "once") === "once" && "Staff can submit this checklist only once per session"}
+                  {active.submitPolicy === "once_per_day" && "Staff can resubmit after midnight each day"}
+                  {active.submitPolicy === "unlimited" && "Staff can submit multiple times without restriction"}
+                </div>
               </div>
             </div>
 

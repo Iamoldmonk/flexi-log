@@ -528,15 +528,49 @@ export default function StaffView({ templates, onSubmit }) {
   }, [allTemplates]);
 
   const setValue = (id, val) => {
-    setValues(v => ({ ...v, [id]: val }));
+    setValues(v => {
+      const next = { ...v, [id]: val };
+      // Auto-set parent toggle to "yes" when all subtasks are completed
+      if (id.endsWith("_sub") && template) {
+        const fieldId = id.replace(/_sub$/, "");
+        const field = template.fields.find(f => f.id === fieldId);
+        if (field && field.subTasks && field.subTasks.length > 0) {
+          const allDone = field.subTasks.every((_, i) => val[i]);
+          if (allDone && field.type === "toggle") next[fieldId] = "yes";
+        }
+      }
+      return next;
+    });
     setErrors(e => { const n = { ...e }; delete n[id]; return n; });
+  };
+
+  const canResubmit = (tpl) => {
+    const policy = tpl.submitPolicy || "once";
+    if (policy === "unlimited") return true;
+    if (policy === "once_per_day") {
+      const lastSubmit = submittedIds[tpl.id];
+      if (!lastSubmit) return true;
+      const today = new Date().toDateString();
+      return new Date(lastSubmit).toDateString() !== today;
+    }
+    return !submittedIds[tpl.id]; // "once"
   };
 
   const handleSubmit = () => {
     if (!template) return;
-    if (submittedIds[template.id]) return; // prevent re-submit
+    if (!canResubmit(template)) return;
     const newErrors = {};
-    template.fields.forEach(f => { if (f.required && !values[f.id]) newErrors[f.id] = "This field is required"; });
+    template.fields.forEach(f => {
+      if (f.required && !values[f.id]) newErrors[f.id] = "This field is required";
+      if (f.requirePhoto && f.type !== "photo") {
+        const photos = values[f.id + "_reqphoto"];
+        if (!photos || photos.length === 0) newErrors[f.id] = "Photo capture is required for this field";
+      }
+      if (f.type === "photo" && f.required) {
+        const photos = values[f.id];
+        if (!photos || photos.length === 0) newErrors[f.id] = "Photo is required";
+      }
+    });
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     template.fields.forEach(f => {
       if (f.type === "number" && f.trackInventory) {
@@ -549,10 +583,15 @@ export default function StaffView({ templates, onSubmit }) {
     const log = { id: Date.now(), templateName: template.name, submittedAt: new Date().toLocaleString(), values: { ...values }, fields: template.fields };
     onSubmit(log);
     setMyLogs(prev => [log, ...prev]);
-    setSubmittedIds(prev => ({ ...prev, [template.id]: true }));
+    setSubmittedIds(prev => ({ ...prev, [template.id]: Date.now() }));
+    // For unlimited/once_per_day, reset form after submit so staff can fill again
+    if ((template.submitPolicy || "once") !== "once") {
+      setValues({});
+      setErrors({});
+    }
   };
 
-  const isSubmitted = template && !!submittedIds[template.id];
+  const isSubmitted = template && !canResubmit(template);
   const submittedCount = Object.keys(submittedIds).length;
 
   return (
@@ -596,7 +635,7 @@ export default function StaffView({ templates, onSubmit }) {
               <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 8 }}>SELECT CHECKLIST</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {allTemplates.map(t => {
-                  const done = !!submittedIds[t.id];
+                  const done = !canResubmit(t);
                   return (
                     <button key={t.id} onClick={() => { setSelectedId(t.id); setValues({}); setErrors({}); }} style={{
                       padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
