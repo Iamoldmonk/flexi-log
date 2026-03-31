@@ -89,12 +89,6 @@ export default function App() {
         setError("Incorrect role or password.");
         return;
       }
-      // Outlet selection required only if role has outlets assigned
-      const roleOutlets = matchedRole.assignedOutlets || [];
-      if (roleOutlets.length > 0 && !selectedOutlet) {
-        setError("Please select an outlet.");
-        return;
-      }
       setRole(matchedRole); // Store role object with checklists
       setError("");
     } else {
@@ -160,27 +154,7 @@ export default function App() {
               ))}
             </select>
 
-            {/* Show outlet dropdown only if selected role has outlets */}
-            {(() => {
-              const currentRole = roles?.find(r => r._docId === selectedRole);
-              const roleOutlets = currentRole?.assignedOutlets || [];
-              const availableOutlets = outlets?.filter(o => roleOutlets.includes(o._docId)) || [];
-              if (availableOutlets.length === 0) return null;
-              return (
-                <>
-                  <label style={S.label}>Select Outlet</label>
-                  <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)}
-                    style={S.input}
-                    onFocus={e => e.target.style.borderColor = "#000"}
-                    onBlur={e => e.target.style.borderColor = "#E8E8E8"}>
-                    <option value="">-- Choose an outlet --</option>
-                    {availableOutlets.map(o => (
-                      <option key={o._docId} value={o._docId}>{o.name}</option>
-                    ))}
-                  </select>
-                </>
-              );
-            })()}
+            {/* Outlet selection removed — role determines which templates staff sees */}
 
             <label style={S.label}>Role Password</label>
             <input type="password" value={rolePassword} onChange={e => setRolePassword(e.target.value)}
@@ -225,20 +199,24 @@ export default function App() {
     />
   );
 
-  // Staff view - filter templates by role
-  const roleChecklists = role && typeof role === 'object' && role.assignedChecklists
-    ? templates?.filter(t => role.assignedChecklists.includes(t._docId))
-    : [];
+  // Staff view - filter templates by role's assigned outlets + directly assigned checklists
+  const roleOutletIds = (role && typeof role === 'object' && role.assignedOutlets) || [];
+  const roleChecklistIds = (role && typeof role === 'object' && role.assignedChecklists) || [];
+  const roleChecklists = templates?.filter(t =>
+    roleChecklistIds.includes(t._docId) ||
+    (t.outletId && roleOutletIds.includes(t.outletId))
+  ) || [];
 
-  // Wrap addLog to include staff details + outlet
-  const matchedOutlet = outlets?.find(o => o._docId === selectedOutlet);
+  // Wrap addLog to include staff details + outlet (from template's outlet)
   const addLogWithStaff = (log) => {
+    const logTemplate = templates?.find(t => (t._docId || t.id) === log.templateId);
+    const logOutlet = logTemplate?.outletId ? outlets?.find(o => o._docId === logTemplate.outletId) : null;
     return addLog({
       ...log,
       roleId: role._docId,
       roleName: role.name,
-      outletId: selectedOutlet || null,
-      outletName: matchedOutlet?.name || null,
+      outletId: logTemplate?.outletId || null,
+      outletName: logOutlet?.name || null,
     });
   };
 
