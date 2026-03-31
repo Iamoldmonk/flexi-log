@@ -279,8 +279,8 @@ function PhotoField({ field, value, onChange }) {
       {previews.length < (field.maxPhotos || 1) && (
         <div onClick={() => fileRef.current.click()} style={{ border: "2px dashed #E0E0E0", borderRadius: 10, padding: "20px 0", textAlign: "center", cursor: "pointer", background: "#FAFAFA" }}>
           <div style={{ fontSize: 22, color: "#ccc" }}>O</div>
-          <div style={{ fontSize: 12, color: "#bbb", marginTop: 4 }}>{field.forceCapture ? "Take a live photo" : "Tap to add photo"}</div>
-          <input ref={fileRef} type="file" accept="image/*" capture={field.forceCapture ? "environment" : undefined} multiple={field.maxPhotos > 1} onChange={handleFile} style={{ display: "none" }} />
+          <div style={{ fontSize: 12, color: "#bbb", marginTop: 4 }}>Take a live photo</div>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple={field.maxPhotos > 1} onChange={handleFile} style={{ display: "none" }} />
         </div>
       )}
     </div>
