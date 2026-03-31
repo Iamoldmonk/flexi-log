@@ -46,6 +46,7 @@ const defaultField = (typeId) => ({
   dropdownOptions: ["Option 1", "Option 2"], multiSelect: false,
   sigNote: "",
   subTasks: [],
+  subtaskPhotos: false,
   requirePhoto: false,
   referencePhoto: null,
 });
@@ -317,12 +318,19 @@ function FieldConfig({ field, onUpdate }) {
             <label style={{ display: "block", border: "2px dashed #D8D8D8", borderRadius: 9, padding: "14px 0", textAlign: "center", cursor: "pointer", background: "#FAFAFA" }}>
               <div style={{ fontSize: 18, color: "#ccc" }}>◉</div>
               <div style={{ fontSize: 11, color: "#bbb", marginTop: 3 }}>Upload reference photo</div>
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const reader = new FileReader();
-                reader.onload = ev => u({ referencePhoto: ev.target.result });
-                reader.readAsDataURL(file);
+                const img = new Image();
+                img.onload = () => {
+                  const canvas = document.createElement("canvas");
+                  let w = img.width, h = img.height;
+                  if (w > 1200) { h = Math.round(h * (1200 / w)); w = 1200; }
+                  canvas.width = w; canvas.height = h;
+                  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                  u({ referencePhoto: canvas.toDataURL("image/webp", 0.75) });
+                };
+                img.src = URL.createObjectURL(file);
               }} />
             </label>
           )}
@@ -347,6 +355,13 @@ function FieldConfig({ field, onUpdate }) {
           width: "100%", padding: "7px", border: "1.5px dashed #D8D8D8", borderRadius: 8,
           background: "none", fontSize: 12, fontWeight: 600, color: "#888", cursor: "pointer", fontFamily: "inherit",
         }}>+ Add sub-task</button>
+        {(field.subTasks || []).length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <CheckRow label="Enable photo capture for sub-tasks" checked={field.subtaskPhotos || false} onChange={v => u({ subtaskPhotos: v })}>
+              Staff can take a live photo for each sub-task
+            </CheckRow>
+          </div>
+        )}
       </div>
     </div>
   );

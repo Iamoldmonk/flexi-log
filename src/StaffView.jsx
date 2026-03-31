@@ -1,6 +1,22 @@
 import { useState, useRef, useEffect } from "react";
 import { initStock, getStock, applyUsage, isLowStock } from "./inventoryStore";
 
+// ─── Image compression: resize + convert to WebP ────────────────────────────
+function compressImage(file, maxWidth = 1200, quality = 0.75) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * (maxWidth / w)); w = maxWidth; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/webp", quality));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 // ─── Progress Bar ────────────────────────────────────────────────────────────
 function ProgressBar({ fields, values, sigDone = {} }) {
   if (fields.length === 0) return null;
@@ -56,22 +72,18 @@ function ProgressBar({ fields, values, sigDone = {} }) {
 }
 
 // ─── Sub-tasks component ──────────────────────────────────────────────────────
-function SubTasks({ subTasks, fieldId, values, onChange }) {
+function SubTasks({ subTasks, fieldId, values, onChange, subtaskPhotos }) {
   const fileRefs = useRef({});
   if (!subTasks || subTasks.length === 0) return null;
   const checked = values[fieldId + "_sub"] || {};
   const photos = values[fieldId + "_subphotos"] || {};
   const doneCount = Object.values(checked).filter(Boolean).length;
 
-  const handlePhoto = (i, e) => {
+  const handlePhoto = async (i, e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const updated = { ...photos, [i]: ev.target.result };
-      onChange(fieldId + "_subphotos", updated);
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImage(file);
+    onChange(fieldId + "_subphotos", { ...photos, [i]: compressed });
   };
 
   return (
@@ -90,11 +102,15 @@ function SubTasks({ subTasks, fieldId, values, onChange }) {
               {checked[i] && <span style={{ color: "#fff", fontSize: 10, fontWeight: 900 }}>✓</span>}
             </div>
             <span style={{ fontSize: 12, color: checked[i] ? "#2d9e2d" : "#1a1a1a", textDecoration: checked[i] ? "line-through" : "none", flex: 1 }}>{st}</span>
-            {/* Photo capture button per sub-task */}
-            <div onClick={e => { e.stopPropagation(); fileRefs.current[i]?.click(); }} style={{ width: 28, height: 28, borderRadius: 6, background: photos[i] ? "#2d9e2d18" : "#F0F0F0", border: `1.5px solid ${photos[i] ? "#2d9e2d35" : "#E8E8E8"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", fontSize: 12, color: photos[i] ? "#2d9e2d" : "#aaa" }}>
-              {photos[i] ? "✓" : "◉"}
-            </div>
-            <input ref={el => fileRefs.current[i] = el} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => handlePhoto(i, e)} />
+            {/* Photo capture button per sub-task — only if admin enabled */}
+            {subtaskPhotos && (
+              <>
+                <div onClick={e => { e.stopPropagation(); fileRefs.current[i]?.click(); }} style={{ width: 28, height: 28, borderRadius: 6, background: photos[i] ? "#2d9e2d18" : "#F0F0F0", border: `1.5px solid ${photos[i] ? "#2d9e2d35" : "#E8E8E8"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", fontSize: 12, color: photos[i] ? "#2d9e2d" : "#aaa" }}>
+                  {photos[i] ? "✓" : "◉"}
+                </div>
+                <input ref={el => fileRefs.current[i] = el} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => handlePhoto(i, e)} />
+              </>
+            )}
           </div>
           {photos[i] && (
             <div style={{ marginTop: 4, paddingLeft: 36, display: "flex", alignItems: "center", gap: 6 }}>
@@ -253,15 +269,12 @@ function NumberField({ field, value, onChange, wasteValue, onWasteChange }) {
 function PhotoField({ field, value, onChange }) {
   const fileRef = useRef();
   const [previews, setPreviews] = useState(value || []);
-  const handleFile = (e) => {
-    Array.from(e.target.files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const updated = [...previews, ev.target.result].slice(0, field.maxPhotos || 1);
-        setPreviews(updated); onChange(updated);
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleFile = async (e) => {
+    for (const file of Array.from(e.target.files)) {
+      const compressed = await compressImage(file);
+      const updated = [...previews, compressed].slice(0, field.maxPhotos || 1);
+      setPreviews(updated); onChange(updated);
+    }
   };
   return (
     <div>
@@ -629,10 +642,13 @@ export default function StaffView({ templates, onSubmit }) {
                         <div style={{ fontSize: 10.5, color: "#888", marginTop: 4 }}>Use this as a guide when completing this task</div>
                       </div>
                     )}
-                    {/* Require photo capture badge */}
-                    {field.requirePhoto && (
-                      <div style={{ marginBottom: 8, padding: "6px 10px", background: "#FFF8F0", border: "1px solid #FFD5A0", borderRadius: 7, fontSize: 11, color: "#e67e22", fontWeight: 600 }}>
-                        📷 Photo capture required for this field
+                    {/* Require photo capture — actual camera input */}
+                    {field.requirePhoto && field.type !== "photo" && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ padding: "6px 10px", background: "#FFF8F0", border: "1px solid #FFD5A0", borderRadius: 7, fontSize: 11, color: "#e67e22", fontWeight: 600, marginBottom: 6 }}>
+                          📷 Photo capture required for this field
+                        </div>
+                        <PhotoField field={{ ...field, id: field.id + "_reqphoto", maxPhotos: field.maxRequiredPhotos || 1 }} value={values[field.id + "_reqphoto"]} onChange={v => setValue(field.id + "_reqphoto", v)} />
                       </div>
                     )}
                     {field.type === "toggle" && <ToggleField field={field} value={values[field.id]} onChange={v => setValue(field.id, v)} />}
@@ -652,7 +668,7 @@ export default function StaffView({ templates, onSubmit }) {
                       </select>
                     )}
                     {field.type === "signature" && <SignatureField field={field} value={values[field.id]} onChange={v => setValue(field.id, v)} />}
-                    <SubTasks subTasks={field.subTasks} fieldId={field.id} values={values} onChange={setValue} />
+                    <SubTasks subTasks={field.subTasks} fieldId={field.id} values={values} onChange={setValue} subtaskPhotos={field.subtaskPhotos} />
                     {errors[field.id] && <div style={{ fontSize: 11.5, color: "#cc3333", marginTop: 7 }}>⚠ {errors[field.id]}</div>}
                   </div>
                 ))}
