@@ -613,18 +613,6 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
     // If outlet is selected, assign template to it
     if (selectedOutlet) {
       t.outletId = selectedOutlet;
-    } else {
-      // If no outlet selected, ask user which outlets to copy to
-      const outletList = outlets.map(o => o.name).join(", ");
-      const shouldCopy = window.confirm(`Create template for all outlets?\n\n${outletList}\n\nClick OK to copy to all, Cancel to create for current selection only.`);
-      if (shouldCopy && outlets.length > 0) {
-        // Create template for each outlet
-        const newTemplates = outlets.map(o => ({ ...t, outletId: o._docId, id: uid() }));
-        setTemplates(ts => [...ts, ...newTemplates]);
-        setActiveId(newTemplates[0].id);
-        setMode("builder");
-        return;
-      }
     }
 
     setTemplates(ts => [...ts, t]);
