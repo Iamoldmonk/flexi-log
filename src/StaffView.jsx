@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { initStock, getStock, applyUsage, isLowStock } from "./inventoryStore";
+import { shouldShowToday, incrementSubmissionCount } from "./recurrenceUtils";
 
 // ─── Image compression: resize + convert to WebP ────────────────────────────
 function compressImage(file, maxWidth = 1200, quality = 0.75) {
@@ -507,7 +508,9 @@ function SubmittedLogsView({ logs }) {
 }
 
 export default function StaffView({ templates, onSubmit, logs = [], roleName = "" }) {
-  const allTemplates = templates || DEFAULT_TEMPLATES;
+  const rawTemplates = templates || DEFAULT_TEMPLATES;
+  // Filter templates by recurrence — only show checklists scheduled for today
+  const allTemplates = useMemo(() => rawTemplates.filter(t => shouldShowToday(t)), [rawTemplates]);
   const [selectedId, setSelectedId] = useState(allTemplates[0]?.id || null);
   const [values, setValues] = useState(() => {
     // Restore submitted values if template was already submitted
@@ -515,7 +518,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
       const saved = localStorage.getItem("flexi_submittedValues_" + roleName);
       if (saved) {
         const all = JSON.parse(saved);
-        const firstTpl = (templates || DEFAULT_TEMPLATES)[0];
+        const firstTpl = allTemplates[0];
         if (firstTpl && all[firstTpl.id]) return all[firstTpl.id];
       }
     } catch {}
@@ -647,6 +650,8 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     onSubmit(log);
     setMyLogs(prev => [log, ...prev]);
     setSubmittedIds(prev => ({ ...prev, [template.id]: Date.now() }));
+    // Track submission count for "ends after N" recurrence
+    incrementSubmissionCount(template.id);
     // Save submitted values so they persist across tab switches
     setSubmittedValues(prev => {
       const next = { ...prev, [template.id]: { ...values } };
@@ -790,7 +795,11 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: "center", padding: 60, color: "#bbb", fontSize: 13 }}>No checklists available. Ask your admin to create one.</div>
+            <div style={{ textAlign: "center", padding: 60, color: "#bbb", fontSize: 13 }}>
+              {rawTemplates.length > 0 && allTemplates.length === 0
+                ? "No checklists scheduled for today. Check back on your next scheduled day."
+                : "No checklists available. Ask your admin to create one."}
+            </div>
           )}
         </div>
       )}
