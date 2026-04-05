@@ -506,14 +506,52 @@ function SubmittedLogsView({ logs }) {
   );
 }
 
-export default function StaffView({ templates, onSubmit }) {
+export default function StaffView({ templates, onSubmit, logs = [], roleName = "" }) {
   const allTemplates = templates || DEFAULT_TEMPLATES;
   const [selectedId, setSelectedId] = useState(allTemplates[0]?.id || null);
   const [values, setValues] = useState({});
-  const [submittedIds, setSubmittedIds] = useState({}); // tracks which template ids have been submitted
+  const [submittedIds, setSubmittedIds] = useState(() => {
+    // Restore from localStorage
+    try {
+      const saved = localStorage.getItem("flexi_submittedIds_" + roleName);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
   const [errors, setErrors] = useState({});
   const [tab, setTab] = useState("checklist");
   const [myLogs, setMyLogs] = useState([]); // session logs for this staff member
+
+  // Derive submitted state from Firestore logs on mount
+  useEffect(() => {
+    if (!logs || logs.length === 0) return;
+    const today = new Date().toDateString();
+    const todaySubmissions = {};
+    logs.forEach(log => {
+      if (log.roleName === roleName) {
+        const logDate = log.submittedAt ? new Date(log.submittedAt).toDateString() : null;
+        if (logDate === today) {
+          // Find matching template by name
+          const tpl = allTemplates.find(t => t.name === log.templateName);
+          if (tpl && !todaySubmissions[tpl.id]) {
+            todaySubmissions[tpl.id] = new Date(log.submittedAt).getTime();
+          }
+        }
+      }
+    });
+    if (Object.keys(todaySubmissions).length > 0) {
+      setSubmittedIds(prev => {
+        const merged = { ...prev, ...todaySubmissions };
+        try { localStorage.setItem("flexi_submittedIds_" + roleName, JSON.stringify(merged)); } catch {}
+        return merged;
+      });
+    }
+  }, [logs, roleName, allTemplates]);
+
+  // Persist submittedIds to localStorage whenever they change
+  useEffect(() => {
+    try { localStorage.setItem("flexi_submittedIds_" + roleName, JSON.stringify(submittedIds)); } catch {}
+  }, [submittedIds, roleName]);
 
   const template = allTemplates.find(t => t.id === selectedId) || allTemplates[0];
 
@@ -536,7 +574,9 @@ export default function StaffView({ templates, onSubmit }) {
         const field = template.fields.find(f => f.id === fieldId);
         if (field && field.subTasks && field.subTasks.length > 0) {
           const allDone = field.subTasks.every((_, i) => val[i]);
-          if (allDone && field.type === "toggle") next[fieldId] = "yes";
+          if (field.type === "toggle") {
+            next[fieldId] = allDone ? "yes" : null;
+          }
         }
       }
       return next;

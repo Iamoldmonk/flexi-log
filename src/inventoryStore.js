@@ -1,7 +1,20 @@
-// In-memory inventory store
-// key: fieldId, value: { current, opening, min, unit, label, history: [{date, change, remaining, submittedBy}] }
+// Persistent inventory store — backed by localStorage
+// key: fieldId, value: { current, opening, min, unit, label, history: [{date, change, remaining}] }
 
-const store = {};
+const STORAGE_KEY = "flexi_inventory";
+
+function loadStore() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch { return {}; }
+}
+
+function saveStore() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch {}
+}
+
+let store = loadStore();
 
 export function initStock(fieldId, { openingStock, minStock, unit, label }) {
   if (!store[fieldId]) {
@@ -13,12 +26,14 @@ export function initStock(fieldId, { openingStock, minStock, unit, label }) {
       label: label || "",
       history: [],
     };
+    saveStore();
   } else {
     // update settings without resetting stock
     store[fieldId].opening = Number(openingStock) || 0;
     store[fieldId].min = Number(minStock) || 0;
     store[fieldId].unit = unit || "";
     store[fieldId].label = label || "";
+    saveStore();
   }
 }
 
@@ -26,6 +41,7 @@ export function resetStock(fieldId, openingStock) {
   if (store[fieldId]) {
     store[fieldId].current = Number(openingStock) || 0;
     store[fieldId].history = [];
+    saveStore();
   }
 }
 
@@ -47,6 +63,7 @@ export function applyUsage(fieldId, total, action = "subtract", breakdown = {}) 
     wasted: breakdown.wasted || 0,
     remaining: store[fieldId].current,
   });
+  saveStore();
   return store[fieldId];
 }
 

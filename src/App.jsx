@@ -266,7 +266,7 @@ export default function App() {
       )}
 
       {staffTab === "checklist"
-        ? <StaffView templates={roleChecklists} onSubmit={addLogWithStaff} />
+        ? <StaffView templates={roleChecklists} onSubmit={addLogWithStaff} logs={logs} roleName={role?.name} />
         : <SubmittedLogs logs={logs} roleName={role?.name} />
       }
     </div>
