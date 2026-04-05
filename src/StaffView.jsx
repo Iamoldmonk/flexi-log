@@ -509,11 +509,29 @@ function SubmittedLogsView({ logs }) {
 export default function StaffView({ templates, onSubmit, logs = [], roleName = "" }) {
   const allTemplates = templates || DEFAULT_TEMPLATES;
   const [selectedId, setSelectedId] = useState(allTemplates[0]?.id || null);
-  const [values, setValues] = useState({});
+  const [values, setValues] = useState(() => {
+    // Restore submitted values if template was already submitted
+    try {
+      const saved = localStorage.getItem("flexi_submittedValues_" + roleName);
+      if (saved) {
+        const all = JSON.parse(saved);
+        const firstTpl = (templates || DEFAULT_TEMPLATES)[0];
+        if (firstTpl && all[firstTpl.id]) return all[firstTpl.id];
+      }
+    } catch {}
+    return {};
+  });
   const [submittedIds, setSubmittedIds] = useState(() => {
     // Restore from localStorage
     try {
       const saved = localStorage.getItem("flexi_submittedIds_" + roleName);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+  const [submittedValues, setSubmittedValues] = useState(() => {
+    try {
+      const saved = localStorage.getItem("flexi_submittedValues_" + roleName);
       if (saved) return JSON.parse(saved);
     } catch {}
     return {};
@@ -610,6 +628,11 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
         const photos = values[f.id];
         if (!photos || photos.length === 0) newErrors[f.id] = "Photo is required";
       }
+      if (f.subTasks && f.subTasks.length > 0) {
+        const checked = values[f.id + "_sub"] || {};
+        const allDone = f.subTasks.every((_, i) => checked[i]);
+        if (!allDone) newErrors[f.id] = "All sub-tasks must be completed";
+      }
     });
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     template.fields.forEach(f => {
@@ -624,6 +647,12 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     onSubmit(log);
     setMyLogs(prev => [log, ...prev]);
     setSubmittedIds(prev => ({ ...prev, [template.id]: Date.now() }));
+    // Save submitted values so they persist across tab switches
+    setSubmittedValues(prev => {
+      const next = { ...prev, [template.id]: { ...values } };
+      try { localStorage.setItem("flexi_submittedValues_" + roleName, JSON.stringify(next)); } catch {}
+      return next;
+    });
     // For unlimited/once_per_day, reset form after submit so staff can fill again
     if ((template.submitPolicy || "once") !== "once") {
       setValues({});
@@ -677,7 +706,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 {allTemplates.map(t => {
                   const done = !canResubmit(t);
                   return (
-                    <button key={t.id} onClick={() => { setSelectedId(t.id); setValues({}); setErrors({}); }} style={{
+                    <button key={t.id} onClick={() => { setSelectedId(t.id); setValues(submittedValues[t.id] || {}); setErrors({}); }} style={{
                       padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
                       border: "1.5px solid " + (done ? "#2d9e2d" : selectedId === t.id ? "#000" : "#E8E8E8"),
                       background: done ? "#2d9e2d18" : selectedId === t.id ? "#000" : "#fff",

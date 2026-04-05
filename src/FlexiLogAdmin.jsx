@@ -411,7 +411,42 @@ function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast }) {
 }
 
 // ─── Templates Sidebar ─────────────────────────────────────────────────────────
-function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete, isMobile }) {
+function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete, isMobile, outlets = [] }) {
+  // Group templates by outlet
+  const outletMap = {};
+  outlets.forEach(o => { outletMap[o._docId] = o.name; });
+
+  const groups = [];
+  const unassigned = templates.filter(t => !t.outletId || !outletMap[t.outletId]);
+  const outletIds = [...new Set(templates.map(t => t.outletId).filter(id => id && outletMap[id]))];
+
+  outletIds.forEach(oid => {
+    groups.push({ id: oid, name: outletMap[oid], items: templates.filter(t => t.outletId === oid) });
+  });
+  if (unassigned.length > 0) groups.push({ id: "_none", name: "Unassigned", items: unassigned });
+
+  // If no outlets exist, show flat list
+  const hasGroups = outlets.length > 0 && groups.length > 0;
+
+  const renderItem = (t, compact) => (
+    <div key={t.id} onClick={() => onSelect(t.id)} style={{
+      padding: compact ? "7px 12px" : "9px 10px", borderRadius: 8, cursor: "pointer",
+      marginBottom: compact ? 0 : 4, flexShrink: compact ? 0 : undefined,
+      background: t.id === activeId ? "#000" : compact ? "#F5F5F5" : "transparent",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+    }}
+      onMouseEnter={!compact ? e => { if (t.id !== activeId) e.currentTarget.style.background = "#F5F5F5"; } : undefined}
+      onMouseLeave={!compact ? e => { if (t.id !== activeId) e.currentTarget.style.background = "transparent"; } : undefined}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compact ? 120 : undefined }}>{t.name || "Untitled"}</div>
+        <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
+      </div>
+      {templates.length > 1 && t.id !== activeId && (
+        <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{ width: 18, height: 18, border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0 }}>✕</button>
+      )}
+    </div>
+  );
+
   if (isMobile) {
     return (
       <div style={{ background: "#fff", border: "1.5px solid #EBEBEB", borderRadius: 14, padding: "10px 12px", marginBottom: 10 }}>
@@ -419,39 +454,36 @@ function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete, isMo
           <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>TEMPLATES · {templates.length}</div>
           <button onClick={onNew} style={{ padding: "4px 10px", border: "1.5px dashed #D8D8D8", borderRadius: 7, background: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#888", fontFamily: "inherit" }}>+ New</button>
         </div>
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
-          {templates.map(t => (
-            <div key={t.id} onClick={() => onSelect(t.id)} style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", flexShrink: 0, background: t.id === activeId ? "#000" : "#F5F5F5", display: "flex", alignItems: "center", gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{t.name || "Untitled"}</div>
-                <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
-              </div>
-              {templates.length > 1 && t.id !== activeId && (
-                <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{ width: 18, height: 18, border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0 }}>✕</button>
-              )}
+        {hasGroups ? groups.map(g => (
+          <div key={g.id} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.04em", marginBottom: 4, padding: "0 4px" }}>
+              {g.name} <span style={{ color: "#bbb", fontWeight: 600 }}>({g.items.length})</span>
             </div>
-          ))}
-        </div>
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
+              {g.items.map(t => renderItem(t, true))}
+            </div>
+          </div>
+        )) : (
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
+            {templates.map(t => renderItem(t, true))}
+          </div>
+        )}
       </div>
     );
   }
-  // Desktop: vertical sidebar
+
+  // Desktop: vertical sidebar grouped by outlet
   return (
-    <div style={{ width: 210, flexShrink: 0, background: "#fff", border: "1.5px solid #EBEBEB", borderRadius: 14, padding: 14, position: "sticky", top: 68, height: "fit-content" }}>
+    <div style={{ width: 210, flexShrink: 0, background: "#fff", border: "1.5px solid #EBEBEB", borderRadius: 14, padding: 14, position: "sticky", top: 68, height: "fit-content", maxHeight: "calc(100vh - 90px)", overflowY: "auto" }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 10 }}>TEMPLATES · {templates.length}</div>
-      {templates.map(t => (
-        <div key={t.id} onClick={() => onSelect(t.id)} style={{ padding: "9px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 4, background: t.id === activeId ? "#000" : "transparent", display: "flex", alignItems: "center", justifyContent: "space-between" }}
-          onMouseEnter={e => { if (t.id !== activeId) e.currentTarget.style.background = "#F5F5F5"; }}
-          onMouseLeave={e => { if (t.id !== activeId) e.currentTarget.style.background = "transparent"; }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name || "Untitled"}</div>
-            <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
+      {hasGroups ? groups.map(g => (
+        <div key={g.id} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.04em", marginBottom: 5, padding: "4px 6px", background: "#FFF8F0", borderRadius: 5, border: "1px solid #FFE8CC" }}>
+            {g.name} <span style={{ color: "#ccc", fontWeight: 600 }}>· {g.items.length}</span>
           </div>
-          {templates.length > 1 && t.id !== activeId && (
-            <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{ width: 18, height: 18, border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0 }}>✕</button>
-          )}
+          {g.items.map(t => renderItem(t, false))}
         </div>
-      ))}
+      )) : templates.map(t => renderItem(t, false))}
       <button onClick={onNew} style={{ width: "100%", marginTop: 8, padding: "8px 0", border: "1.5px dashed #D8D8D8", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#888", fontFamily: "inherit" }}>+ New Template</button>
     </div>
   );
@@ -725,7 +757,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
       {mode === "outlets" && <OutletManager outlets={outlets} onSaveOutlet={saveOutlet} onDeleteOutlet={deleteOutlet} />}
 
       {mode !== "dashboard" && mode !== "roles" && mode !== "outlets" && <div style={isMobile ? { maxWidth: 1020, margin: "0 auto", padding: "12px 10px" } : { display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
-        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} isMobile={isMobile} />
+        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} isMobile={isMobile} outlets={outlets} />
 
         {mode === "builder" ? (
           <div style={{ flex: 1, minWidth: 0 }}>
