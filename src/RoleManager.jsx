@@ -140,12 +140,17 @@ export default function RoleManager({ roles = [], templates = [], outlets = [], 
               {templates && templates.length > 0 ? (() => {
                 const outletMap = {};
                 outlets.forEach(o => { outletMap[o._docId] = o.name; });
+                // Only show checklists from selected outlets + unassigned
+                const filtered = templates.filter(t =>
+                  !t.outletId || !outletMap[t.outletId] || formData.assignedOutlets.includes(t.outletId)
+                );
                 const groups = {};
-                templates.forEach(t => {
+                filtered.forEach(t => {
                   const groupName = t.outletId && outletMap[t.outletId] ? outletMap[t.outletId] : "Unassigned";
                   if (!groups[groupName]) groups[groupName] = [];
                   groups[groupName].push(t);
                 });
+                if (Object.keys(groups).length === 0) return <div style={{ fontSize: 12, color: "#aaa" }}>Select an outlet above to see its checklists</div>;
                 return Object.entries(groups).map(([groupName, items]) => (
                   <div key={groupName} style={{ marginBottom: 8 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.04em", padding: "4px 0", borderBottom: "1px solid #F5F5F5", marginBottom: 4 }}>
@@ -203,7 +208,8 @@ export default function RoleManager({ roles = [], templates = [], outlets = [], 
                   <ul style={{ marginTop: 6, paddingLeft: 20 }}>
                     {role.assignedOutlets.map(outletId => {
                       const outlet = outlets?.find(o => o._docId === outletId);
-                      return <li key={outletId}>{outlet?.name || outletId}</li>;
+                      if (!outlet) return null;
+                      return <li key={outletId}>{outlet.name}</li>;
                     })}
                   </ul>
                 ) : (

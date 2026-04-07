@@ -1,6 +1,17 @@
 import { useState, useMemo } from "react";
 import { getAllStock, isLowStock } from "./inventoryStore";
 
+// ─── Photo Lightbox ──────────────────────────────────────────────────────────
+function PhotoLightbox({ src, onClose }) {
+  if (!src) return null;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
+      <img src={src} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8 }} />
+      <div style={{ position: "absolute", top: 16, right: 20, color: "#fff", fontSize: 28, cursor: "pointer", fontWeight: 300 }}>✕</div>
+    </div>
+  );
+}
+
 const FIELD_ICONS = {
   toggle: "✓", text: "T", number: "#", photo: "◉",
   timestamp: "◷", rating: "★", dropdown: "▾", signature: "✍",
@@ -16,7 +27,7 @@ function StatCard({ label, value, sub, color }) {
   );
 }
 
-function LogRow({ log, expanded, onToggle }) {
+function LogRow({ log, expanded, onToggle, onPhotoClick, onDelete }) {
   return (
     <div style={{ border: "1.5px solid #EBEBEB", borderRadius: 12, overflow: "hidden", marginBottom: 8 }}>
       <div onClick={onToggle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", cursor: "pointer", background: expanded ? "#FAFAFA" : "#fff" }}>
@@ -27,8 +38,9 @@ function LogRow({ log, expanded, onToggle }) {
             <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{log.submittedAt}</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div style={{ background: "#2d9e2d18", border: "1px solid #2d9e2d35", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#2d9e2d" }}>✓ Submitted</div>
+          {onDelete && <button onClick={e => { e.stopPropagation(); if (window.confirm("Delete this log?")) onDelete(log._docId); }} style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid #E8E8E8", background: "#fff", color: "#cc3333", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✕</button>}
           <span style={{ fontSize: 11, color: "#ccc" }}>{expanded ? "▴" : "▾"}</span>
         </div>
       </div>
@@ -66,13 +78,43 @@ function LogRow({ log, expanded, onToggle }) {
                   {field.type === "timestamp" && <div style={{ fontSize: 12, color: "#888", fontFamily: "monospace" }}>{val || "Auto-recorded"}</div>}
                   {field.type === "photo" && val && val.length > 0 && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-                      {val.map((src, i) => <img key={i} src={src} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid #E8E8E8" }} />)}
+                      {val.map((src, i) => <img key={i} src={src} alt="" onClick={e => { e.stopPropagation(); onPhotoClick(src); }} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid #E8E8E8", cursor: "zoom-in" }} />)}
                     </div>
                   )}
                   {field.type === "signature" && val && (
-                    <img src={val} alt="sig" style={{ maxWidth: 160, height: 48, border: "1px solid #E8E8E8", borderRadius: 6, background: "#FAFAFA", marginTop: 4 }} />
+                    <img src={val} alt="sig" onClick={e => { e.stopPropagation(); onPhotoClick(val); }} style={{ maxWidth: 160, height: 48, border: "1px solid #E8E8E8", borderRadius: 6, background: "#FAFAFA", marginTop: 4, cursor: "zoom-in" }} />
                   )}
                   {!val && field.type !== "toggle" && <div style={{ fontSize: 12, color: "#ccc", fontStyle: "italic" }}>Not filled</div>}
+                  {/* Required photo for field */}
+                  {(() => {
+                    const reqPhotos = log.values[field.id + "_reqphoto"];
+                    if (!reqPhotos || !Array.isArray(reqPhotos) || reqPhotos.length === 0) return null;
+                    return (
+                      <div style={{ marginTop: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", marginBottom: 4 }}>CAPTURED PHOTO</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {reqPhotos.map((src, i) => <img key={i} src={src} alt="" onClick={e => { e.stopPropagation(); onPhotoClick(src); }} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid #E8E8E8", cursor: "zoom-in" }} />)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {/* Sub-tasks */}
+                  {field.subTasks && field.subTasks.length > 0 && (() => {
+                    const checked = log.values[field.id + "_sub"] || {};
+                    const subPhotos = log.values[field.id + "_subphotos"] || {};
+                    return (
+                      <div style={{ marginTop: 6, padding: "8px 10px", background: "#F8F8F8", borderRadius: 7, border: "1px solid #EBEBEB" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#888", marginBottom: 4 }}>SUB-TASKS</div>
+                        {field.subTasks.map((st, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 12 }}>
+                            <span style={{ color: checked[i] ? "#2d9e2d" : "#ccc", fontWeight: 700 }}>{checked[i] ? "✓" : "✕"}</span>
+                            <span style={{ color: checked[i] ? "#1a1a1a" : "#aaa", textDecoration: checked[i] ? "none" : "line-through" }}>{st}</span>
+                            {subPhotos[i] && <img src={subPhotos[i]} alt="" onClick={e => { e.stopPropagation(); onPhotoClick(subPhotos[i]); }} style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4, border: "1px solid #E8E8E8", marginLeft: "auto", cursor: "zoom-in" }} />}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );
@@ -307,10 +349,11 @@ function LogTable({ logs, templates }) {
   );
 }
 
-export default function AdminDashboard({ logs, templates }) {
+export default function AdminDashboard({ logs, templates, onDeleteLog }) {
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const filteredLogs = logs.filter(l =>
     l.templateName.toLowerCase().includes(search.toLowerCase()) ||
@@ -330,6 +373,7 @@ export default function AdminDashboard({ logs, templates }) {
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "22px 16px" }}>
+      {lightboxSrc && <PhotoLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, background: "#EBEBEB", borderRadius: 9, padding: 3, marginBottom: 20 }}>
@@ -361,7 +405,7 @@ export default function AdminDashboard({ logs, templates }) {
               No submissions yet — staff will appear here after they submit checklists
             </div>
           ) : logs.slice(0, 5).map(log => (
-            <LogRow key={log.id} log={log} expanded={expandedId === log.id} onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)} />
+            <LogRow key={log.id} log={log} expanded={expandedId === log.id} onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)} onPhotoClick={setLightboxSrc} onDelete={onDeleteLog} />
           ))}
           {logs.length > 5 && (
             <button onClick={() => setActiveTab("logs")} style={{ width: "100%", padding: "10px 0", border: "1.5px dashed #D8D8D8", borderRadius: 10, background: "none", fontSize: 12, fontWeight: 600, color: "#888", cursor: "pointer", fontFamily: "inherit", marginTop: 6 }}>
@@ -392,7 +436,7 @@ export default function AdminDashboard({ logs, templates }) {
               {logs.length === 0 ? "No submissions yet" : "No results match your search"}
             </div>
           ) : filteredLogs.map(log => (
-            <LogRow key={log.id} log={log} expanded={expandedId === log.id} onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)} />
+            <LogRow key={log.id} log={log} expanded={expandedId === log.id} onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)} onPhotoClick={setLightboxSrc} onDelete={onDeleteLog} />
           ))}
         </div>
       )}

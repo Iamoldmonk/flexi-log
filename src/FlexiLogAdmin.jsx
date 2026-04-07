@@ -586,7 +586,7 @@ const emptyRecurrence = () => ({
 });
 const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", expiryHours: 15, recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, submitPolicy: "once", fields: [] });
 
-export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange }) {
+export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange, onDeleteLog }) {
   // Normalize: ensure every template has an `id` field (Firestore uses _docId)
   const initTemplates = (externalTemplates || [emptyTemplate()]).map(t => ({ ...t, id: t.id || t._docId || uid() }));
   const [templates, setTemplatesLocal] = useState(initTemplates);
@@ -750,7 +750,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
         </div>
       )}
 
-      {mode === "dashboard" && <AdminDashboard logs={logs} templates={templates} />}
+      {mode === "dashboard" && <AdminDashboard logs={logs} templates={templates} onDeleteLog={onDeleteLog} />}
 
       {mode === "roles" && <RoleManager roles={roles} templates={templates} outlets={outlets} onSaveRole={saveRole} onDeleteRole={deleteRole} />}
 

@@ -91,7 +91,11 @@ export function useLogs() {
     });
   }, []);
 
-  return [logs, addLog, loading];
+  const deleteLog = useCallback(async (docId) => {
+    await deleteDoc(doc(db, "logs", docId));
+  }, []);
+
+  return [logs, addLog, loading, deleteLog];
 }
 
 /**

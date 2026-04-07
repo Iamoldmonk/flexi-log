@@ -72,7 +72,7 @@ export default function App() {
   const isMobile = useIsMobile();
   // Real-time Firestore sync for templates, logs & roles
   const [templates, setTemplates, templatesLoading] = useTemplates();
-  const [logs, addLog, logsLoading] = useLogs();
+  const [logs, addLog, logsLoading, deleteLog] = useLogs();
   const [roles] = useRoles();
   const [outlets] = useOutlets();
 
@@ -196,6 +196,7 @@ export default function App() {
       logs={logs}
       templates={templates}
       onTemplatesChange={setTemplates}
+      onDeleteLog={deleteLog}
     />
   );
 
