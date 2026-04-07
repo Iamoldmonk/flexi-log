@@ -42,11 +42,7 @@ export function shouldShowToday(template, now = new Date()) {
 
   // ── "Every day" ──
   if (quick === "Every day") {
-    // If specific days are selected, only show on those days
-    if (rec.days && rec.days.length > 0) {
-      return rec.days.includes(todayDay);
-    }
-    return true; // no days specified = every day
+    return true; // always show every day
   }
 
   // ── "Every week" ──

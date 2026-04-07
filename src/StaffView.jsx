@@ -142,6 +142,43 @@ function recurrenceLabel(tpl) {
   return label;
 }
 
+// ─── Date + time helpers ─────────────────────────────────────────────────────
+function todayLabel() {
+  return new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
+}
+
+function elapsedLabel(timestamp) {
+  if (!timestamp) return "";
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ${mins % 60}m ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function getExpiryTime(template) {
+  const hours = template.expiryHours ?? 15;
+  if (hours <= 0) return null; // 0 means no expiry
+  const timeParts = (template.time || "08:00").split(":");
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeParts[0]) || 8, parseInt(timeParts[1]) || 0);
+  return new Date(start.getTime() + hours * 60 * 60 * 1000);
+}
+
+function expiryStatus(template) {
+  const expiry = getExpiryTime(template);
+  if (!expiry) return { expired: false, label: "" };
+  const now = Date.now();
+  const diff = expiry.getTime() - now;
+  if (diff <= 0) return { expired: true, label: "Expired" };
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return { expired: false, label: `Expires in ${mins}m` };
+  const hrs = Math.floor(mins / 60);
+  return { expired: false, label: `Expires in ${hrs}h ${mins % 60}m` };
+}
+
 const DEFAULT_TEMPLATES = [
   {
     id: "t1", name: "Morning Opening Checklist", recurrence: "Daily", time: "08:00",
@@ -525,23 +562,42 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     return {};
   });
   const [submittedIds, setSubmittedIds] = useState(() => {
-    // Restore from localStorage
+    // Restore from localStorage — filter out entries not from today
     try {
       const saved = localStorage.getItem("flexi_submittedIds_" + roleName);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const today = new Date().toDateString();
+        const filtered = {};
+        Object.entries(parsed).forEach(([id, ts]) => {
+          if (new Date(ts).toDateString() === today) filtered[id] = ts;
+        });
+        // Save cleaned version back
+        localStorage.setItem("flexi_submittedIds_" + roleName, JSON.stringify(filtered));
+        return filtered;
+      }
     } catch {}
     return {};
   });
   const [submittedValues, setSubmittedValues] = useState(() => {
     try {
       const saved = localStorage.getItem("flexi_submittedValues_" + roleName);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        // Also reset submitted values daily
+        const ids = JSON.parse(localStorage.getItem("flexi_submittedIds_" + roleName) || "{}");
+        if (Object.keys(ids).length === 0) {
+          localStorage.removeItem("flexi_submittedValues_" + roleName);
+          return {};
+        }
+        return JSON.parse(saved);
+      }
     } catch {}
     return {};
   });
   const [errors, setErrors] = useState({});
   const [tab, setTab] = useState("checklist");
-  const [myLogs, setMyLogs] = useState([]); // session logs for this staff member
+  // Use Firestore logs filtered by role (persists across logout/login)
+  const myLogs = useMemo(() => logs.filter(l => l.roleName === roleName).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)), [logs, roleName]);
 
   // Derive submitted state from Firestore logs on mount
   useEffect(() => {
@@ -620,6 +676,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
   const handleSubmit = () => {
     if (!template) return;
     if (!canResubmit(template)) return;
+    if (expiryStatus(template).expired) return;
     const newErrors = {};
     template.fields.forEach(f => {
       if (f.required && !values[f.id]) newErrors[f.id] = "This field is required";
@@ -648,7 +705,6 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     });
     const log = { id: Date.now(), templateName: template.name, submittedAt: new Date().toLocaleString(), values: { ...values }, fields: template.fields };
     onSubmit(log);
-    setMyLogs(prev => [log, ...prev]);
     setSubmittedIds(prev => ({ ...prev, [template.id]: Date.now() }));
     // Track submission count for "ends after N" recurrence
     incrementSubmissionCount(template.id);
@@ -665,8 +721,17 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     }
   };
 
+  // Live timer — updates elapsed/expiry labels every 30s
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, []);
+
   const isSubmitted = template && !canResubmit(template);
   const submittedCount = Object.keys(submittedIds).length;
+  const expiry = template ? expiryStatus(template) : { expired: false, label: "" };
+  const isExpired = expiry.expired && !isSubmitted;
 
   return (
     <div>
@@ -725,14 +790,26 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
           )}
 
           {template ? (
-            <div style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${isSubmitted ? "#2d9e2d" : "#EBEBEB"}`, overflow: "hidden" }}>
-              <div style={{ background: isSubmitted ? "#2d9e2d" : "#111", padding: "18px 20px 16px" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>{recurrenceLabel(template)} · {template.time}</div>
+            <div style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : "#EBEBEB"}`, overflow: "hidden" }}>
+              <div style={{ background: isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : "#111", padding: "18px 20px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>
+                    {recurrenceLabel(template)} · {template.time}
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "right" }}>
+                    {todayLabel()}
+                    {isSubmitted && <div style={{ marginTop: 2 }}>Submitted: {new Date(submittedIds[template.id]).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>}
+                  </div>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{template.name}</div>
-                  {isSubmitted && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>✓ Submitted</span>}
+                  {isSubmitted && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>✓ {elapsedLabel(submittedIds[template.id])}</span>}
+                  {isExpired && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>Expired</span>}
                 </div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{template.fields.length} fields</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{template.fields.length} fields</span>
+                  {!isSubmitted && !isExpired && expiry.label && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>{expiry.label}</span>}
+                </div>
               </div>
               <ProgressBar fields={template.fields} values={values} />
               <div style={{ padding: 18 }}>
@@ -787,7 +864,11 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 ))}
                 {isSubmitted ? (
                   <div style={{ width: "100%", padding: "13px 0", background: "#2d9e2d18", border: "1.5px solid #2d9e2d35", borderRadius: 10, color: "#2d9e2d", fontSize: 14, fontWeight: 700, textAlign: "center", marginTop: 4 }}>
-                    ✓ Checklist Submitted
+                    ✓ Submitted {elapsedLabel(submittedIds[template.id])}
+                  </div>
+                ) : isExpired ? (
+                  <div style={{ width: "100%", padding: "13px 0", background: "#e67e2218", border: "1.5px solid #e67e2235", borderRadius: 10, color: "#e67e22", fontSize: 14, fontWeight: 700, textAlign: "center", marginTop: 4 }}>
+                    Checklist Expired
                   </div>
                 ) : (
                   <button onClick={handleSubmit} style={{ width: "100%", padding: "13px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 }}>Submit Log ✓</button>

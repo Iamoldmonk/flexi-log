@@ -584,7 +584,7 @@ const emptyRecurrence = () => ({
   endsAfter: 1,
   autoReset: "schedule",   // schedule|completion
 });
-const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, submitPolicy: "once", fields: [] });
+const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", expiryHours: 15, recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, submitPolicy: "once", fields: [] });
 
 export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange }) {
   // Normalize: ensure every template has an `id` field (Firestore uses _docId)
@@ -794,8 +794,8 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                           }}>{q}</button>
                         ))}
                       </div>
-                      {/* Day picker — shown for Every day, Every week, and Custom week */}
-                      {(rec.quick === "Every day" || rec.quick === "Every week") && (
+                      {/* Day picker — shown for Every week only */}
+                      {rec.quick === "Every week" && (
                         <div style={{ padding: "12px 14px", background: "#F8F8F8", border: "1.5px solid #E0E0E0", borderRadius: 10, marginBottom: 8 }}>
                           <div style={{ fontSize: 11, color: "#666", marginBottom: 7 }}>
                             {rec.quick === "Every day" ? "Repeats on these days" : "Repeats on"}
@@ -897,6 +897,17 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                   <input type="time" value={active.time} onChange={e => updateActive({ time: e.target.value })} style={S.input}
                     onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
                 </div>
+              </div>
+              {/* Expiry hours */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 10 }}>
+                <label style={{ ...S.label, marginBottom: 0, whiteSpace: "nowrap" }}>Checklist Expiry</label>
+                <input type="number" min="0" max="72" value={active.expiryHours ?? 15} onChange={e => updateActive({ expiryHours: Math.max(0, parseInt(e.target.value) || 0) })}
+                  style={{ ...S.input, width: 60, textAlign: "center", padding: "6px 8px" }}
+                  onFocus={e => e.target.style.borderColor = "#000"} onBlur={e => e.target.style.borderColor = "#E8E8E8"} />
+                <span style={{ fontSize: 12, color: "#666" }}>hours after start time</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: "#aaa", marginBottom: 10 }}>
+                {(active.expiryHours ?? 15) === 0 ? "No expiry — staff can submit anytime" : `Staff must submit within ${active.expiryHours ?? 15} hours of ${active.time || "08:00"}`}
               </div>
               <div style={{ marginTop: 12, padding: "10px 12px", background: "#FAFAFA", borderRadius: 9, border: "1.5px solid #EBEBEB" }}>
                 <CheckRow label="Escalation Alert" checked={active.escalate} onChange={v => updateActive({ escalate: v })}>Notify supervisor if checklist is overdue</CheckRow>
