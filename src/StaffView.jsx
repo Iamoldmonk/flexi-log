@@ -769,25 +769,51 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
             </div>
           )}
 
-          {allTemplates.length > 1 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em", marginBottom: 8 }}>SELECT CHECKLIST</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {allTemplates.map(t => {
-                  const done = !canResubmit(t);
-                  return (
-                    <button key={t.id} onClick={() => { setSelectedId(t.id); setValues(submittedValues[t.id] || {}); setErrors({}); }} style={{
-                      padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                      border: "1.5px solid " + (done ? "#2d9e2d" : selectedId === t.id ? "#000" : "#E8E8E8"),
-                      background: done ? "#2d9e2d18" : selectedId === t.id ? "#000" : "#fff",
-                      color: done ? "#2d9e2d" : selectedId === t.id ? "#fff" : "#555",
-                      cursor: "pointer", fontFamily: "inherit",
-                    }}>{done ? "✓ " : ""}{t.name}</button>
-                  );
-                })}
+          {allTemplates.length > 1 && (() => {
+            const open = allTemplates.filter(t => canResubmit(t) && !expiryStatus(t).expired);
+            const submitted = allTemplates.filter(t => !canResubmit(t));
+            const expired = allTemplates.filter(t => canResubmit(t) && expiryStatus(t).expired);
+            const renderBtn = (t, done, exp) => {
+              const sel = selectedId === t.id;
+              return (
+              <button key={t.id} onClick={() => { setSelectedId(t.id); setValues(submittedValues[t.id] || {}); setErrors({}); }} style={{
+                padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: "1.5px solid " + (done ? "#2d9e2d" : exp ? "#e67e22" : sel ? "#555" : "#E8E8E8"),
+                background: done ? "#2d9e2d18" : exp ? "#e67e2218" : sel ? "#f5f5f5" : "#fff",
+                color: done ? "#2d9e2d" : exp ? "#e67e22" : "#555",
+                cursor: "pointer", fontFamily: "inherit",
+                boxShadow: sel ? "0 3px 10px rgba(0,0,0,0.18)" : "none",
+                transition: "all 0.15s",
+              }}>
+                {done ? "✓ " : exp ? "⏰ " : ""}{t.name}
+                {done && submittedIds[t.id] && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>
+                  {new Date(submittedIds[t.id]).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                </span>}
+              </button>
+            );};
+            return (
+              <div style={{ marginBottom: 16 }}>
+                {open.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.08em", marginBottom: 6 }}>OPEN</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{open.map(t => renderBtn(t, false, false))}</div>
+                  </div>
+                )}
+                {submitted.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#2d9e2d", letterSpacing: "0.08em", marginBottom: 6 }}>SUBMITTED</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{submitted.map(t => renderBtn(t, true, false))}</div>
+                  </div>
+                )}
+                {expired.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.08em", marginBottom: 6 }}>EXPIRED</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{expired.map(t => renderBtn(t, false, true))}</div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {template ? (
             <div style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : "#EBEBEB"}`, overflow: "hidden" }}>
@@ -812,7 +838,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 </div>
               </div>
               <ProgressBar fields={template.fields} values={values} />
-              <div style={{ padding: 18 }}>
+              <div style={{ padding: 18, ...(isSubmitted || isExpired ? { pointerEvents: "none", opacity: 0.7 } : {}) }}>
                 {template.fields.map((field, idx) => (
                   <div key={field.id} style={{ marginBottom: 18, padding: "14px 15px", border: "1.5px solid " + (errors[field.id] ? "#ffcccc" : "#EBEBEB"), borderRadius: 11, background: errors[field.id] ? "#FFFAFA" : "#fff" }}>
                     <label style={{ ...S.label, marginBottom: 8 }}>

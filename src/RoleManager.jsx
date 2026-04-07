@@ -135,20 +135,36 @@ export default function RoleManager({ roles = [], templates = [], outlets = [], 
 
           <div style={{ marginBottom: 16 }}>
             <label style={S.label}>Assigned Checklists</label>
-            <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 8, padding: 12, background: "#fff", maxHeight: 200, overflowY: "auto" }}>
-              {templates && templates.length > 0 ? (
-                templates.map(template => (
-                  <label key={template._docId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F0F0F0", cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={formData.assignedChecklists.includes(template._docId)}
-                      onChange={() => toggleChecklist(template._docId)}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                    />
-                    <span style={{ fontSize: 12 }}>{template.name}</span>
-                  </label>
-                ))
-              ) : (
+            <div style={{ fontSize: 10, color: "#aaa", marginBottom: 6 }}>Checklists from assigned outlets are included automatically</div>
+            <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 8, padding: 12, background: "#fff", maxHeight: 260, overflowY: "auto" }}>
+              {templates && templates.length > 0 ? (() => {
+                const outletMap = {};
+                outlets.forEach(o => { outletMap[o._docId] = o.name; });
+                const groups = {};
+                templates.forEach(t => {
+                  const groupName = t.outletId && outletMap[t.outletId] ? outletMap[t.outletId] : "Unassigned";
+                  if (!groups[groupName]) groups[groupName] = [];
+                  groups[groupName].push(t);
+                });
+                return Object.entries(groups).map(([groupName, items]) => (
+                  <div key={groupName} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.04em", padding: "4px 0", borderBottom: "1px solid #F5F5F5", marginBottom: 4 }}>
+                      {groupName} <span style={{ color: "#ccc" }}>({items.length})</span>
+                    </div>
+                    {items.map(template => (
+                      <label key={template._docId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0 6px 8px", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.assignedChecklists.includes(template._docId)}
+                          onChange={() => toggleChecklist(template._docId)}
+                          style={{ width: 16, height: 16, cursor: "pointer" }}
+                        />
+                        <span style={{ fontSize: 12 }}>{template.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                ));
+              })() : (
                 <div style={{ fontSize: 12, color: "#aaa" }}>No checklists available</div>
               )}
             </div>
@@ -195,19 +211,21 @@ export default function RoleManager({ roles = [], templates = [], outlets = [], 
                 )}
               </div>
 
-              <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>
-                <strong>Assigned Checklists:</strong>
-                {role.assignedChecklists && role.assignedChecklists.length > 0 ? (
-                  <ul style={{ marginTop: 6, paddingLeft: 20 }}>
-                    {role.assignedChecklists.map(checklistId => {
-                      const template = templates?.find(t => t._docId === checklistId);
-                      return <li key={checklistId}>{template?.name || checklistId}</li>;
-                    })}
-                  </ul>
-                ) : (
-                  <div style={{ marginTop: 6, color: "#aaa" }}>No checklists assigned</div>
-                )}
-              </div>
+              {role.assignedChecklists && role.assignedChecklists.length > 0 && (() => {
+                const outletMap = {};
+                outlets.forEach(o => { outletMap[o._docId] = o.name; });
+                const named = role.assignedChecklists.map(id => {
+                  const t = templates?.find(t => t._docId === id);
+                  if (!t) return null;
+                  const outlet = t.outletId && outletMap[t.outletId] ? ` (${outletMap[t.outletId]})` : "";
+                  return t.name + outlet;
+                }).filter(Boolean);
+                return named.length > 0 ? (
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>
+                    <strong>Assigned Checklists:</strong> {named.join(", ")}
+                  </div>
+                ) : null;
+              })()}
             </div>
           ))
         ) : (
