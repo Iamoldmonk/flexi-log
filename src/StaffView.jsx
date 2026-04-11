@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { initStock, getStock, applyUsage, isLowStock } from "./inventoryStore";
-import { shouldShowToday, incrementSubmissionCount } from "./recurrenceUtils";
+import { shouldShowToday, incrementSubmissionCount, getMissedInstances } from "./recurrenceUtils";
 
 // ─── Image compression: resize + convert to WebP ────────────────────────────
 function compressImage(file, maxWidth = 1200, quality = 0.75) {
@@ -548,6 +548,9 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
   const rawTemplates = templates || DEFAULT_TEMPLATES;
   // Filter templates by recurrence — only show checklists scheduled for today
   const allTemplates = useMemo(() => rawTemplates.filter(t => shouldShowToday(t)), [rawTemplates]);
+  // Past missed checklists — days when a recurring checklist wasn't submitted
+  const expiredTemplates = useMemo(() => getMissedInstances(rawTemplates, logs, roleName, 30), [rawTemplates, logs, roleName]);
+  const [showExpired, setShowExpired] = useState(false);
   const [selectedId, setSelectedId] = useState(allTemplates[0]?.id || null);
   const [values, setValues] = useState(() => {
     // Restore submitted values if template was already submitted
@@ -769,6 +772,50 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
             </div>
           )}
 
+          {/* Expired / Past checklists toggle — shown above selector */}
+          {expiredTemplates.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <button onClick={() => setShowExpired(v => !v)} style={{
+                width: "100%", padding: "10px 14px", border: "1.5px solid #E8E8E8", borderRadius: 10,
+                background: showExpired ? "#FFF8F0" : "#fff", cursor: "pointer", fontFamily: "inherit",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#e67e22" }}>
+                  Past / Expired Checklists
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ background: "#e67e22", color: "#fff", borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{expiredTemplates.length}</span>
+                  <span style={{ fontSize: 11, color: "#ccc" }}>{showExpired ? "▴" : "▾"}</span>
+                </span>
+              </button>
+              {showExpired && (() => {
+                // Group by date, ascending
+                const byDate = {};
+                expiredTemplates.forEach(t => {
+                  const d = t.instanceDate || "unknown";
+                  if (!byDate[d]) byDate[d] = [];
+                  byDate[d].push(t);
+                });
+                const sortedDates = Object.keys(byDate).sort();
+                return (
+                  <div style={{ marginTop: 8, padding: "10px 12px", background: "#FFF8F0", borderRadius: 9, border: "1px solid #FFE8CC" }}>
+                    {sortedDates.map(date => {
+                      const label = new Date(date + "T00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+                      const items = byDate[date];
+                      return (
+                        <div key={date} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid #FFE8CC" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#e67e22", minWidth: 90 }}>{label}</span>
+                          <span style={{ fontSize: 11, color: "#999" }}>{items.map(t => t.name).join(", ")}</span>
+                          <span style={{ fontSize: 10, color: "#ccc", marginLeft: "auto" }}>({items.length})</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {allTemplates.length > 1 && (() => {
             const open = allTemplates.filter(t => canResubmit(t) && !expiryStatus(t).expired);
             const submitted = allTemplates.filter(t => !canResubmit(t));
@@ -908,6 +955,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 : "No checklists available. Ask your admin to create one."}
             </div>
           )}
+
         </div>
       )}
     </div>

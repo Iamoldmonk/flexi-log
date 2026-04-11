@@ -167,6 +167,71 @@ function getSubmissionCount(templateId) {
 }
 
 /**
+ * Generate all past missed instances for recurring templates.
+ * Returns an array of { ...template, instanceDate: "YYYY-MM-DD" } for each
+ * day the checklist was scheduled but not submitted.
+ * @param {Object[]} templates - Array of template objects
+ * @param {Object[]} logs - Array of log objects from Firestore
+ * @param {string} roleName - Current role name to filter logs
+ * @param {number} [maxDays=30] - How far back to look
+ * @returns {Object[]} Array of expired instance objects
+ */
+export function getMissedInstances(templates, logs = [], roleName = "", maxDays = 30) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const instances = [];
+
+  // Build a set of "templateName::YYYY-MM-DD" that were submitted by this role
+  const submittedSet = new Set();
+  logs.forEach(log => {
+    if (log.roleName !== roleName) return;
+    const d = log.submittedAt ? new Date(log.submittedAt) : null;
+    if (d) {
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      submittedSet.add(`${log.templateName}::${dateStr}`);
+    }
+  });
+
+  templates.forEach(tpl => {
+    const rec = tpl.recurrence;
+    if (!rec) return;
+    if (typeof rec === "string" && rec === "Does not repeat") return;
+    if (typeof rec === "object" && rec.quick === "Does not repeat") return;
+
+    const start = tpl.startDate ? parseDate(tpl.startDate) : null;
+    if (!start) return;
+
+    // Walk each day from start (or maxDays ago, whichever is later) to yesterday
+    const lookback = new Date(today);
+    lookback.setDate(lookback.getDate() - maxDays);
+    const from = start > lookback ? start : lookback;
+
+    const cursor = new Date(from);
+    while (cursor < today) {
+      const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+
+      // Check if this template was scheduled on this day
+      if (shouldShowToday(tpl, cursor)) {
+        // Check if it was submitted
+        const key = `${tpl.name}::${dateStr}`;
+        if (!submittedSet.has(key)) {
+          instances.push({
+            ...tpl,
+            instanceDate: dateStr,
+            instanceId: `${tpl.id}_${dateStr}`,
+          });
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  // Sort newest first
+  instances.sort((a, b) => b.instanceDate.localeCompare(a.instanceDate));
+  return instances;
+}
+
+/**
  * Parse "YYYY-MM-DD" to a Date at midnight
  */
 function parseDate(str) {
