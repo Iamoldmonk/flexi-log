@@ -39,6 +39,7 @@ function LogRow({ log, expanded, onToggle, onPhotoClick, onDelete }) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {log.isTest && <span style={{ background: "#4a90d918", border: "1px solid #4a90d935", borderRadius: 20, padding: "3px 8px", fontSize: 10, fontWeight: 700, color: "#4a90d9" }}>TEST</span>}
           <div style={{ background: "#2d9e2d18", border: "1px solid #2d9e2d35", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#2d9e2d" }}>✓ Submitted</div>
           {onDelete && <button onClick={e => { e.stopPropagation(); if (window.confirm("Delete this log?")) onDelete(log._docId); }} style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid #E8E8E8", background: "#fff", color: "#cc3333", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✕</button>}
           <span style={{ fontSize: 11, color: "#ccc" }}>{expanded ? "▴" : "▾"}</span>

@@ -197,6 +197,7 @@ export default function App() {
       templates={templates}
       onTemplatesChange={setTemplates}
       onDeleteLog={deleteLog}
+      onAddLog={addLog}
     />
   );
 

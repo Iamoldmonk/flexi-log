@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import StaffView from "./StaffView";
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < breakpoint);
@@ -368,15 +369,16 @@ function FieldConfig({ field, onUpdate }) {
 }
 
 // ─── Field Row ─────────────────────────────────────────────────────────────────
-function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast }) {
-  const [open, setOpen] = useState(true);
+function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast, index, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
   const type = FIELD_TYPES.find(t => t.id === field.type);
   return (
     <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 12, background: "#fff", marginBottom: 8, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", background: open ? "#fff" : "#FAFAFA" }}
         onClick={() => setOpen(!open)}>
-        <div style={{ width: 28, height: 28, borderRadius: 7, background: "#F2F2F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: "#F2F2F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0, position: "relative" }}>
           {type.icon}
+          <span style={{ position: "absolute", top: -6, left: -6, width: 16, height: 16, borderRadius: "50%", background: "#000", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{index}</span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <input
@@ -428,24 +430,28 @@ function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete, isMo
   // If no outlets exist, show flat list
   const hasGroups = outlets.length > 0 && groups.length > 0;
 
-  const renderItem = (t, compact) => (
+  const renderItem = (t, compact) => {
+    const sel = t.id === activeId;
+    return (
     <div key={t.id} onClick={() => onSelect(t.id)} style={{
-      padding: compact ? "7px 12px" : "9px 10px", borderRadius: 8, cursor: "pointer",
+      padding: compact ? "7px 12px" : "9px 10px", borderRadius: 10, cursor: "pointer",
       marginBottom: compact ? 0 : 4, flexShrink: compact ? 0 : undefined,
-      background: t.id === activeId ? "#000" : compact ? "#F5F5F5" : "transparent",
+      background: sel ? "#F0F0F0" : compact ? "#F5F5F5" : "transparent",
+      border: sel ? "1.5px solid #D8D8D8" : "1.5px solid transparent",
       display: "flex", alignItems: "center", justifyContent: "space-between",
+      transition: "all 0.15s",
     }}
-      onMouseEnter={!compact ? e => { if (t.id !== activeId) e.currentTarget.style.background = "#F5F5F5"; } : undefined}
-      onMouseLeave={!compact ? e => { if (t.id !== activeId) e.currentTarget.style.background = "transparent"; } : undefined}>
+      onMouseEnter={!compact ? e => { if (!sel) e.currentTarget.style.background = "#F8F8F8"; } : undefined}
+      onMouseLeave={!compact ? e => { if (!sel) e.currentTarget.style.background = "transparent"; } : undefined}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: t.id === activeId ? "#fff" : "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compact ? 120 : undefined }}>{t.name || "Untitled"}</div>
-        <div style={{ fontSize: 10, color: t.id === activeId ? "rgba(255,255,255,0.45)" : "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compact ? 120 : undefined }}>{t.name || "Untitled"}</div>
+        <div style={{ fontSize: 10, color: "#bbb", marginTop: 1 }}>{t.fields.length} field{t.fields.length !== 1 ? "s" : ""}</div>
       </div>
-      {templates.length > 1 && t.id !== activeId && (
+      {templates.length > 1 && !sel && (
         <button onClick={e => { e.stopPropagation(); onDelete(t.id); }} style={{ width: 18, height: 18, border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 12, padding: 0, flexShrink: 0 }}>✕</button>
       )}
     </div>
-  );
+  );};
 
   if (isMobile) {
     return (
@@ -489,86 +495,23 @@ function TemplatesSidebar({ templates, activeId, onSelect, onNew, onDelete, isMo
   );
 }
 
-// ─── Preview ──────────────────────────────────────────────────────────────────
-function Preview({ template }) {
+// ─── Preview — uses real StaffView with test log submission ──────────────────
+function Preview({ template, onTestSubmit }) {
   if (!template) return <div style={{ textAlign: "center", padding: 40, color: "#ccc", fontSize: 13 }}>Select a template to preview</div>;
-  const { name, recurrence, time, startDate, fields } = template;
-  const recLabel = typeof recurrence === "string" ? recurrence : (recurrence?.quick || "Every day");
+  // Render StaffView with this single template, mark submissions as test
   return (
-    <div style={{ maxWidth: 400, margin: "0 auto" }}>
-      <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #EBEBEB", overflow: "hidden", boxShadow: "0 6px 28px rgba(0,0,0,0.07)" }}>
-        <div style={{ background: "#111", padding: "18px 20px 16px" }}>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>{recLabel} · {startDate || ""} · {time}</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "#fff" }}>{name || "Untitled Checklist"}</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 3 }}>{fields.length} fields · Staff view</div>
-        </div>
-        <div style={{ padding: 16 }}>
-          {fields.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 28, color: "#ccc", fontSize: 12 }}>No fields added yet</div>
-          ) : fields.map(field => {
-            const type = FIELD_TYPES.find(t => t.id === field.type);
-            return (
-              <div key={field.id} style={{ marginBottom: 10, padding: "11px 13px", border: "1.5px solid #EBEBEB", borderRadius: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>
-                    {field.label || `Untitled ${type.label}`}
-                    {field.required && <span style={{ color: "#ff4444" }}> *</span>}
-                  </span>
-                  <span style={{ fontSize: 10, color: "#bbb" }}>{type.icon}</span>
-                </div>
-                {field.type === "toggle" && (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {[{ l: field.yesLabel || "Done", c: field.toggleColor }, { l: field.noLabel || "Skip", c: "#999" }].map((b, i) => (
-                      <div key={i} style={{ flex: 1, padding: "7px 0", borderRadius: 7, textAlign: "center", fontSize: 11.5, fontWeight: 700, background: i === 0 ? field.toggleColor + "15" : "#F5F5F5", border: `1.5px solid ${i === 0 ? field.toggleColor + "35" : "#E8E8E8"}`, color: i === 0 ? field.toggleColor : "#999" }}>{b.l}</div>
-                    ))}
-                  </div>
-                )}
-                {field.type === "text" && (
-                  <div style={{ background: "#FAFAFA", border: "1.5px solid #EBEBEB", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, color: "#ccc", minHeight: field.multiline ? 60 : "auto" }}>{field.placeholder || "Type here…"}</div>
-                )}
-                {field.type === "number" && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <div style={{ flex: 1, background: "#FAFAFA", border: "1.5px solid #EBEBEB", borderRadius: 7, padding: "8px 10px", fontSize: 12, color: "#ccc" }}>0 {field.unit}</div>
-                    {field.trackWaste && <div style={{ flex: 1, background: "#FFF8F5", border: "1.5px solid #FFE5D5", borderRadius: 7, padding: "8px 10px", fontSize: 11, color: "#e8a87c" }}>Wasted: 0</div>}
-                  </div>
-                )}
-                {field.type === "photo" && (
-                  <div style={{ background: "#F8F8F8", border: "2px dashed #E0E0E0", borderRadius: 8, padding: "16px 0", textAlign: "center" }}>
-                    <div style={{ fontSize: 18, color: "#ccc" }}>◉</div>
-                    <div style={{ fontSize: 11, color: "#bbb", marginTop: 3 }}>{field.forceCapture ? "Live capture only" : "Tap to add photo"}</div>
-                  </div>
-                )}
-                {field.type === "timestamp" && (
-                  <div style={{ background: "#FAFAFA", border: "1.5px solid #EBEBEB", borderRadius: 7, padding: "7px 10px", fontSize: 11, color: "#bbb", fontFamily: "monospace" }}>Auto · Wed 25 Mar 2026, 08:00</div>
-                )}
-                {field.type === "rating" && (
-                  <div>
-                    {field.ratingLabel && <div style={{ fontSize: 11, color: "#aaa", marginBottom: 5 }}>{field.ratingLabel}</div>}
-                    <div style={{ display: "flex", gap: 3 }}>{Array.from({ length: field.maxStars }).map((_, i) => <span key={i} style={{ fontSize: 20, color: "#E8E8E8" }}>★</span>)}</div>
-                  </div>
-                )}
-                {field.type === "dropdown" && (
-                  <div style={{ background: "#FAFAFA", border: "1.5px solid #EBEBEB", borderRadius: 7, padding: "8px 10px", fontSize: 12, color: "#aaa", display: "flex", justifyContent: "space-between" }}>
-                    <span>{field.dropdownOptions[0] || "Select…"}</span><span>▾</span>
-                  </div>
-                )}
-                {field.type === "signature" && (
-                  <div>
-                    {field.sigNote && <div style={{ fontSize: 11, color: "#aaa", marginBottom: 6 }}>{field.sigNote}</div>}
-                    <div style={{ background: "#FAFAFA", border: "1.5px dashed #D8D8D8", borderRadius: 8, height: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 11, color: "#ccc" }}>Sign here</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {fields.length > 0 && (
-            <button style={{ width: "100%", padding: "12px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Submit Log</button>
-          )}
-        </div>
+    <div>
+      <div style={{ textAlign: "center", padding: "8px 0", marginBottom: 4 }}>
+        <span style={{ display: "inline-block", background: "#4a90d918", border: "1px solid #4a90d935", borderRadius: 20, padding: "4px 14px", fontSize: 11, fontWeight: 700, color: "#4a90d9" }}>
+          🧪 Test Mode — submissions saved as test logs
+        </span>
       </div>
-      <div style={{ textAlign: "center", fontSize: 10.5, color: "#ccc", marginTop: 10 }}>Staff Preview · Read Only</div>
+      <StaffView
+        templates={[{ ...template, submitPolicy: "unlimited", expiryHours: 0 }]}
+        onSubmit={log => onTestSubmit && onTestSubmit({ ...log, isTest: true, roleName: "Admin (Test)" })}
+        logs={[]}
+        roleName="__admin_test__"
+      />
     </div>
   );
 }
@@ -586,7 +529,7 @@ const emptyRecurrence = () => ({
 });
 const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", expiryHours: 15, recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, submitPolicy: "once", fields: [] });
 
-export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange, onDeleteLog }) {
+export default function FlexiLogAdmin({ onLogout, logs = [], templates: externalTemplates, onTemplatesChange, onDeleteLog, onAddLog }) {
   // Normalize: ensure every template has an `id` field (Firestore uses _docId)
   const initTemplates = (externalTemplates || [emptyTemplate()]).map(t => ({ ...t, id: t.id || t._docId || uid() }));
   const [templates, setTemplatesLocal] = useState(initTemplates);
@@ -624,6 +567,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
     : templates;
 
   const active = templates.find(t => t.id === activeId) || templates[0];
+  const [fieldsOpenKey, setFieldsOpenKey] = useState({ k: 0, open: true }); // force re-render with open state
   const updateActive = (patch) => setTemplates(ts => ts.map(t => t.id === activeId ? { ...t, ...patch } : t));
   const addField = (type) => updateActive({ fields: [...active.fields, defaultField(type.id)] });
   const updateField = (id, patch) => updateActive({ fields: active.fields.map(f => f.id === id ? { ...f, ...patch } : f) });
@@ -757,7 +701,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
       {mode === "outlets" && <OutletManager outlets={outlets} onSaveOutlet={saveOutlet} onDeleteOutlet={deleteOutlet} />}
 
       {mode !== "dashboard" && mode !== "roles" && mode !== "outlets" && <div style={isMobile ? { maxWidth: 1020, margin: "0 auto", padding: "12px 10px" } : { display: "flex", gap: 16, maxWidth: 1020, margin: "0 auto", padding: "22px 16px", alignItems: "flex-start" }}>
-        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); setMode("builder"); }} onNew={addTemplate} onDelete={deleteTemplate} isMobile={isMobile} outlets={outlets} />
+        <TemplatesSidebar templates={filteredTemplates} activeId={activeId} onSelect={id => { setActiveId(id); window.scrollTo({ top: 0, behavior: "smooth" }); }} onNew={addTemplate} onDelete={deleteTemplate} isMobile={isMobile} outlets={outlets} />
 
         {mode === "builder" ? (
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -939,7 +883,15 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: "#bbb", letterSpacing: "0.08em" }}>FIELDS — {active.fields.length}</span>
-              {active.fields.length > 0 && <span style={{ fontSize: 10.5, color: "#bbb" }}>{active.fields.filter(f => f.required).length} required</span>}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {active.fields.length > 1 && (
+                  <>
+                    <button onClick={() => setFieldsOpenKey(v => ({ k: v.k + 1, open: true }))} style={{ padding: "3px 8px", border: "1px solid #E8E8E8", borderRadius: 6, background: "#fff", fontSize: 10, fontWeight: 600, color: "#888", cursor: "pointer", fontFamily: "inherit" }}>Expand All</button>
+                    <button onClick={() => setFieldsOpenKey(v => ({ k: v.k + 1, open: false }))} style={{ padding: "3px 8px", border: "1px solid #E8E8E8", borderRadius: 6, background: "#fff", fontSize: 10, fontWeight: 600, color: "#888", cursor: "pointer", fontFamily: "inherit" }}>Collapse All</button>
+                  </>
+                )}
+                {active.fields.length > 0 && <span style={{ fontSize: 10.5, color: "#bbb" }}>{active.fields.filter(f => f.required).length} required</span>}
+              </div>
             </div>
 
             {active.fields.length === 0 ? (
@@ -947,15 +899,16 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                 <div style={{ fontSize: 24, marginBottom: 8 }}>＋</div>Add your first field from the panel on the right
               </div>
             ) : active.fields.map((field, i) => (
-              <FieldRow key={field.id} field={field}
+              <FieldRow key={field.id + "_" + fieldsOpenKey.k} field={field} index={i + 1} defaultOpen={fieldsOpenKey.open}
                 onUpdate={p => updateField(field.id, p)}
                 onDelete={() => deleteField(field.id)}
                 onMove={d => moveField(field.id, d)}
                 isFirst={i === 0} isLast={i === active.fields.length - 1} />
             ))}
+            <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ width: "100%", padding: "10px 0", background: "none", border: "1.5px solid #E8E8E8", borderRadius: 10, color: "#aaa", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10 }}>↑ Scroll to Top</button>
           </div>
         ) : (
-          <div style={{ flex: 1 }}><Preview template={active} /></div>
+          <div style={{ flex: 1 }}><Preview template={active} onTestSubmit={onAddLog} /></div>
         )}
 
         {mode === "builder" && (isMobile ? (

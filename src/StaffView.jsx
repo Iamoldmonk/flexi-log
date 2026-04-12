@@ -307,6 +307,8 @@ function NumberField({ field, value, onChange, wasteValue, onWasteChange }) {
 function PhotoField({ field, value, onChange }) {
   const fileRef = useRef();
   const [previews, setPreviews] = useState(value || []);
+  // Sync when parent value resets (e.g., form reset after submit)
+  useEffect(() => { setPreviews(value || []); }, [value]);
   const handleFile = async (e) => {
     for (const file of Array.from(e.target.files)) {
       const compressed = await compressImage(file);
@@ -721,6 +723,8 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     if ((template.submitPolicy || "once") !== "once") {
       setValues({});
       setErrors({});
+      // Clear submitted state so form isn't frozen
+      setSubmittedIds(prev => { const next = { ...prev }; delete next[template.id]; return next; });
     }
   };
 
@@ -946,6 +950,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 ) : (
                   <button onClick={handleSubmit} style={{ width: "100%", padding: "13px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 }}>Submit Log ✓</button>
                 )}
+                <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ width: "100%", padding: "10px 0", background: "none", border: "1.5px solid #E8E8E8", borderRadius: 10, color: "#aaa", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10 }}>↑ Scroll to Top</button>
               </div>
             </div>
           ) : (
