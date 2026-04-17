@@ -369,8 +369,10 @@ function FieldConfig({ field, onUpdate }) {
 }
 
 // ─── Field Row ─────────────────────────────────────────────────────────────────
-function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast, index, defaultOpen = true }) {
+function FieldRow({ field, onUpdate, onDelete, onMove, onDuplicate, isFirst, isLast, index, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const type = FIELD_TYPES.find(t => t.id === field.type);
   return (
     <div style={{ border: "1.5px solid #E8E8E8", borderRadius: 12, background: "#fff", marginBottom: 8, overflow: "hidden" }}>
@@ -388,9 +390,31 @@ function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast, index, d
             placeholder={`Untitled ${type.label}`}
             style={{ width: "100%", fontSize: 12.5, fontWeight: 600, color: "#1a1a1a", border: "none", outline: "none", background: "transparent", padding: 0, cursor: "text", fontFamily: "inherit" }}
           />
-          <div style={{ fontSize: 10.5, color: "#aaa", marginTop: 1 }}>{type.label}{field.required ? " · Required" : ""}</div>
+          <div style={{ fontSize: 10.5, color: "#aaa", marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span>{type.label}</span>
+            {field.required && (
+              <span title="Required" style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", background: "#ffecec", color: "#e74c3c", borderRadius: 10, fontSize: 9.5, fontWeight: 700 }}>
+                ★ Required
+              </span>
+            )}
+            {field.requirePhoto && (
+              <span title="Photo capture required" style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", background: "#FFF8F0", color: "#e67e22", borderRadius: 10, fontSize: 9.5, fontWeight: 700 }}>
+                📷 Photo
+              </span>
+            )}
+            {field.subTasks && field.subTasks.length > 0 && (
+              <span title="Has sub-tasks" style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", background: "#F0F5FF", color: "#4a90d9", borderRadius: 10, fontSize: 9.5, fontWeight: 700 }}>
+                ☰ {field.subTasks.length}
+              </span>
+            )}
+            {field.referencePhoto && (
+              <span title="Reference photo attached" style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", background: "#F0FFF5", color: "#2d9e2d", borderRadius: 10, fontSize: 9.5, fontWeight: 700 }}>
+                🖼 Ref
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 3 }}>
+        <div style={{ display: "flex", gap: 3, position: "relative" }}>
           {[
             { icon: "↑", fn: () => onMove(-1), disabled: isFirst },
             { icon: "↓", fn: () => onMove(1), disabled: isLast },
@@ -402,6 +426,31 @@ function FieldRow({ field, onUpdate, onDelete, onMove, isFirst, isLast, index, d
               opacity: b.disabled ? 0.2 : 1,
             }}>{b.icon}</button>
           ))}
+          <button onClick={e => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+            setMenuOpen(v => !v);
+          }} style={{
+            width: 24, height: 24, border: "none", background: "#F2F2F2", borderRadius: 6,
+            cursor: "pointer", fontSize: 14, color: "#666", lineHeight: 1, padding: 0,
+          }}>⋮</button>
+          {menuOpen && (
+            <>
+              <div onClick={e => { e.stopPropagation(); setMenuOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 9998 }} />
+              <div onClick={e => e.stopPropagation()} style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 9999, background: "#fff", border: "1.5px solid #E8E8E8", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", minWidth: 160, overflow: "hidden" }}>
+                <button onClick={e => { e.stopPropagation(); if (onDuplicate) onDuplicate(); setMenuOpen(false); }} style={{
+                  width: "100%", padding: "10px 14px", border: "none", background: "#fff", textAlign: "left",
+                  fontSize: 12, fontWeight: 600, color: "#1a1a1a", cursor: "pointer", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", gap: 8,
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F5F5F5"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                  <span>⧉</span> Duplicate Field
+                </button>
+              </div>
+            </>
+          )}
           <div style={{ width: 22, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#ccc" }}>
             {open ? "▴" : "▾"}
           </div>
@@ -511,6 +560,7 @@ function Preview({ template, onTestSubmit }) {
         onSubmit={log => onTestSubmit && onTestSubmit({ ...log, isTest: true, roleName: "Admin (Test)" })}
         logs={[]}
         roleName="__admin_test__"
+        bypassRecurrence={true}
       />
     </div>
   );
@@ -525,7 +575,6 @@ const emptyRecurrence = () => ({
   endsType: "never",       // never|on|after
   endsDate: "",
   endsAfter: 1,
-  autoReset: "schedule",   // schedule|completion
 });
 const emptyTemplate = () => ({ id: uid(), name: "", startDate: new Date().toISOString().split("T")[0], time: "08:00", expiryHours: 15, recurrence: emptyRecurrence(), escalate: false, escalateMin: 30, submitPolicy: "once", fields: [] });
 
@@ -542,16 +591,24 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
   const isMobile = useIsMobile();
 
   // Sync when externalTemplates changes (Firestore load)
+  // Preserve the actively-edited template from local state so typing isn't overwritten
   useEffect(() => {
     if (externalTemplates && externalTemplates.length > 0) {
       const normalized = externalTemplates.map(t => ({ ...t, id: t.id || t._docId || uid() }));
-      setTemplatesLocal(normalized);
+      setTemplatesLocal(prev => {
+        const localActive = prev.find(t => t.id === activeId);
+        if (localActive) {
+          // Keep local version of the active template, sync everything else
+          return normalized.map(t => t.id === activeId ? localActive : t);
+        }
+        return normalized;
+      });
       setActiveId(prev => {
         if (normalized.find(t => t.id === prev)) return prev;
         return normalized[0].id;
       });
     }
-  }, [externalTemplates]);
+  }, [externalTemplates, activeId]);
 
   const setTemplates = (updater) => {
     setTemplatesLocal(prev => {
@@ -572,6 +629,14 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
   const addField = (type) => updateActive({ fields: [...active.fields, defaultField(type.id)] });
   const updateField = (id, patch) => updateActive({ fields: active.fields.map(f => f.id === id ? { ...f, ...patch } : f) });
   const deleteField = (id) => updateActive({ fields: active.fields.filter(f => f.id !== id) });
+  const duplicateField = (id) => {
+    const idx = active.fields.findIndex(f => f.id === id);
+    if (idx === -1) return;
+    const original = active.fields[idx];
+    const copy = { ...original, id: uid(), label: (original.label || "Untitled") + " (copy)" };
+    const newFields = [...active.fields.slice(0, idx + 1), copy, ...active.fields.slice(idx + 1)];
+    updateActive({ fields: newFields });
+  };
   const moveField = (id, dir) => {
     const arr = [...active.fields];
     const i = arr.findIndex(f => f.id === id), j = i + dir;
@@ -814,15 +879,6 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                               </label>
                             ))}
                           </div>
-                          {/* Auto-reset */}
-                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #E8E8E8" }}>
-                            <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>Auto-reset</div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              {[["schedule","On Schedule"],["completion","On Completion"]].map(([v,lbl]) => (
-                                <button key={v} onClick={() => upRec({ autoReset: v })} style={S.chip((rec.autoReset || "schedule") === v)}>{lbl}</button>
-                              ))}
-                            </div>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -903,6 +959,7 @@ export default function FlexiLogAdmin({ onLogout, logs = [], templates: external
                 onUpdate={p => updateField(field.id, p)}
                 onDelete={() => deleteField(field.id)}
                 onMove={d => moveField(field.id, d)}
+                onDuplicate={() => duplicateField(field.id)}
                 isFirst={i === 0} isLast={i === active.fields.length - 1} />
             ))}
             <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ width: "100%", padding: "10px 0", background: "none", border: "1.5px solid #E8E8E8", borderRadius: 10, color: "#aaa", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10 }}>↑ Scroll to Top</button>

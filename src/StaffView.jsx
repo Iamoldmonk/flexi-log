@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { initStock, getStock, applyUsage, isLowStock } from "./inventoryStore";
-import { shouldShowToday, incrementSubmissionCount, getMissedInstances } from "./recurrenceUtils";
+import { shouldShowToday, incrementSubmissionCount, getMissedInstances, expandHourlySlots } from "./recurrenceUtils";
 
 // ─── Image compression: resize + convert to WebP ────────────────────────────
 function compressImage(file, maxWidth = 1200, quality = 0.75) {
@@ -39,7 +39,7 @@ function ProgressBar({ fields, values, sigDone = {} }) {
     if (f.type === "signature") fieldDone = !!sigDone[f.id];
     else if (f.type === "toggle") fieldDone = !!values[f.id];
     else if (f.type === "rating") fieldDone = (values[f.id] || 0) > 0;
-    else if (f.type === "timestamp") fieldDone = true;
+    else if (f.type === "timestamp") fieldDone = false; // don't auto-count, only counts when form is submitted
     else fieldDone = !!values[f.id];
     if (fieldDone || allSubTasksDone) doneItems++;
   });
@@ -53,7 +53,7 @@ function ProgressBar({ fields, values, sigDone = {} }) {
     if (f.type === "signature") return !!sigDone[f.id];
     if (f.type === "toggle") return !!values[f.id];
     if (f.type === "rating") return (values[f.id] || 0) > 0;
-    if (f.type === "timestamp") return true;
+    if (f.type === "timestamp") return false;
     return !!values[f.id];
   }).length;
 
@@ -235,7 +235,7 @@ function ToggleField({ field, value, onChange }) {
   return (
     <div style={{ display: "flex", gap: 8 }}>
       {[{ l: field.yesLabel || "Done", v: "yes", c: field.toggleColor || "#2d9e2d" },
-        { l: field.noLabel || "Skip", v: "no", c: "#999" }].map(b => (
+        { l: field.noLabel || "Skip", v: "no", c: "#e74c3c" }].map(b => (
         <button key={b.v} onClick={() => onChange(value === b.v ? null : b.v)} style={{
           flex: 1, padding: "10px 0", borderRadius: 9, fontSize: 13, fontWeight: 700,
           border: "2px solid " + (value === b.v ? b.c : "#E8E8E8"),
@@ -546,23 +546,32 @@ function SubmittedLogsView({ logs }) {
   );
 }
 
-export default function StaffView({ templates, onSubmit, logs = [], roleName = "" }) {
+export default function StaffView({ templates, onSubmit, logs = [], roleName = "", bypassRecurrence = false }) {
   const rawTemplates = templates || DEFAULT_TEMPLATES;
-  // Filter templates by recurrence — only show checklists scheduled for today
-  const allTemplates = useMemo(() => rawTemplates.filter(t => shouldShowToday(t)), [rawTemplates]);
+  // Filter templates by recurrence — only show checklists scheduled for today (unless bypassed for preview)
+  const allTemplates = useMemo(() => {
+    const filtered = bypassRecurrence ? rawTemplates : rawTemplates.filter(t => shouldShowToday(t));
+    // Expand hourly templates into individual time-slot instances
+    return filtered.flatMap(t => expandHourlySlots(t));
+  }, [rawTemplates, bypassRecurrence]);
   // Past missed checklists — days when a recurring checklist wasn't submitted
   const expiredTemplates = useMemo(() => getMissedInstances(rawTemplates, logs, roleName, 30), [rawTemplates, logs, roleName]);
   const [showExpired, setShowExpired] = useState(false);
   const [selectedId, setSelectedId] = useState(allTemplates[0]?.id || null);
   const [values, setValues] = useState(() => {
+    const firstTpl = allTemplates[0];
     // Restore submitted values if template was already submitted
     try {
       const saved = localStorage.getItem("flexi_submittedValues_" + roleName);
       if (saved) {
         const all = JSON.parse(saved);
-        const firstTpl = allTemplates[0];
         if (firstTpl && all[firstTpl.id]) return all[firstTpl.id];
       }
+    } catch {}
+    // Otherwise load draft if available
+    try {
+      const drafts = JSON.parse(localStorage.getItem("flexi_drafts_" + roleName) || "{}");
+      if (firstTpl && drafts[firstTpl.id]) return drafts[firstTpl.id];
     } catch {}
     return {};
   });
@@ -600,6 +609,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     return {};
   });
   const [errors, setErrors] = useState({});
+  const [draftSaved, setDraftSaved] = useState(false);
   const [tab, setTab] = useState("checklist");
   // Use Firestore logs filtered by role (persists across logout/login)
   const myLogs = useMemo(() => logs.filter(l => l.roleName === roleName).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)), [logs, roleName]);
@@ -664,6 +674,33 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
       return next;
     });
     setErrors(e => { const n = { ...e }; delete n[id]; return n; });
+    setDraftSaved(false);
+  };
+
+  const saveDraft = () => {
+    if (!template) return;
+    try {
+      const drafts = JSON.parse(localStorage.getItem("flexi_drafts_" + roleName) || "{}");
+      drafts[template.id] = { ...values, _savedAt: Date.now() };
+      localStorage.setItem("flexi_drafts_" + roleName, JSON.stringify(drafts));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    } catch {}
+  };
+
+  const loadDraft = (tplId) => {
+    try {
+      const drafts = JSON.parse(localStorage.getItem("flexi_drafts_" + roleName) || "{}");
+      return drafts[tplId] || {};
+    } catch { return {}; }
+  };
+
+  const clearDraft = (tplId) => {
+    try {
+      const drafts = JSON.parse(localStorage.getItem("flexi_drafts_" + roleName) || "{}");
+      delete drafts[tplId];
+      localStorage.setItem("flexi_drafts_" + roleName, JSON.stringify(drafts));
+    } catch {}
   };
 
   const canResubmit = (tpl) => {
@@ -713,6 +750,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     setSubmittedIds(prev => ({ ...prev, [template.id]: Date.now() }));
     // Track submission count for "ends after N" recurrence
     incrementSubmissionCount(template.id);
+    clearDraft(template.id);
     // Save submitted values so they persist across tab switches
     setSubmittedValues(prev => {
       const next = { ...prev, [template.id]: { ...values } };
@@ -827,7 +865,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
             const renderBtn = (t, done, exp) => {
               const sel = selectedId === t.id;
               return (
-              <button key={t.id} onClick={() => { setSelectedId(t.id); setValues(submittedValues[t.id] || {}); setErrors({}); }} style={{
+              <button key={t.id} onClick={() => { setSelectedId(t.id); setValues(submittedValues[t.id] || loadDraft(t.id) || {}); setErrors({}); setDraftSaved(false); }} style={{
                 padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
                 border: "1.5px solid " + (done ? "#2d9e2d" : exp ? "#e67e22" : sel ? "#555" : "#E8E8E8"),
                 background: done ? "#2d9e2d18" : exp ? "#e67e2218" : sel ? "#f5f5f5" : "#fff",
@@ -837,6 +875,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 transition: "all 0.15s",
               }}>
                 {done ? "✓ " : exp ? "⏰ " : ""}{t.name}
+                {t.slotLabel && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.8, fontWeight: 700 }}>@{t.slotLabel}</span>}
                 {done && submittedIds[t.id] && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>
                   {new Date(submittedIds[t.id]).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                 </span>}
@@ -871,7 +910,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
               <div style={{ background: isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : "#111", padding: "18px 20px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>
-                    {recurrenceLabel(template)} · {template.time}
+                    {recurrenceLabel(template)} · {template.slotLabel || template.time}
                   </div>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "right" }}>
                     {todayLabel()}
@@ -948,7 +987,12 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                     Checklist Expired
                   </div>
                 ) : (
-                  <button onClick={handleSubmit} style={{ width: "100%", padding: "13px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 }}>Submit Log ✓</button>
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button onClick={saveDraft} style={{ flex: 1, padding: "13px 0", background: "#fff", border: "1.5px solid #E8E8E8", borderRadius: 10, color: draftSaved ? "#2d9e2d" : "#888", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      {draftSaved ? "✓ Draft Saved" : "Save Draft"}
+                    </button>
+                    <button onClick={handleSubmit} style={{ flex: 2, padding: "13px 0", background: "#111", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Submit Log ✓</button>
+                  </div>
                 )}
                 <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ width: "100%", padding: "10px 0", background: "none", border: "1.5px solid #E8E8E8", borderRadius: 10, color: "#aaa", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10 }}>↑ Scroll to Top</button>
               </div>

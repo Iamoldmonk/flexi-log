@@ -92,7 +92,12 @@ function checkCustomRecurrence(rec, start, today, todayDay) {
 
   const daysDiff = Math.floor((today - start) / (1000 * 60 * 60 * 24));
 
-  if (unit === "hour" || unit === "day") {
+  if (unit === "hour") {
+    // Hour-based recurs every day (slots generated separately)
+    return daysDiff >= 0;
+  }
+
+  if (unit === "day") {
     // Every N days
     if (daysDiff < 0) return false;
     return daysDiff % interval === 0;
@@ -229,6 +234,38 @@ export function getMissedInstances(templates, logs = [], roleName = "", maxDays 
   // Sort newest first
   instances.sort((a, b) => b.instanceDate.localeCompare(a.instanceDate));
   return instances;
+}
+
+/**
+ * Generate time-slot instances for hourly-recurring templates for today.
+ * Returns array of { ...template, slotHour, slotLabel, slotId } for each time slot.
+ * Non-hourly templates return [template] unchanged.
+ */
+export function expandHourlySlots(template) {
+  const rec = template.recurrence;
+  if (!rec || typeof rec === "string") return [template];
+  if (rec.quick !== "Custom..." || rec.unit !== "hour") return [template];
+
+  const interval = rec.interval || 1;
+  const [startH, startM] = (template.time || "08:00").split(":").map(Number);
+  const slots = [];
+
+  // Generate slots from start time every N hours until end of day (24:00)
+  for (let h = startH; h < 24; h += interval) {
+    const hh = String(h).padStart(2, "0");
+    const mm = String(startM || 0).padStart(2, "0");
+    const label = `${hh}:${mm}`;
+    slots.push({
+      ...template,
+      slotHour: h,
+      slotMinute: startM || 0,
+      slotLabel: label,
+      slotId: `${template.id}_${hh}${mm}`,
+      id: `${template.id}_${hh}${mm}`, // override id so selector treats each slot independently
+      _parentId: template.id,
+    });
+  }
+  return slots.length > 0 ? slots : [template];
 }
 
 /**
