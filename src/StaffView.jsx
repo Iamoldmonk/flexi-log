@@ -179,6 +179,26 @@ function expiryStatus(template) {
   return { expired: false, label: `Expires in ${hrs}h ${mins % 60}m` };
 }
 
+// For hourly slots — check if the slot's scheduled time has arrived yet
+function slotLocked(template) {
+  if (template.slotHour === undefined) return false;
+  const now = new Date();
+  const slotTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), template.slotHour, template.slotMinute || 0);
+  return now < slotTime;
+}
+
+function slotUnlockLabel(template) {
+  if (template.slotHour === undefined) return "";
+  const now = new Date();
+  const slotTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), template.slotHour, template.slotMinute || 0);
+  const diff = slotTime - now;
+  if (diff <= 0) return "";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `Opens in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  return `Opens in ${hrs}h ${mins % 60}m`;
+}
+
 const DEFAULT_TEMPLATES = [
   {
     id: "t1", name: "Morning Opening Checklist", recurrence: "Daily", time: "08:00",
@@ -719,6 +739,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
     if (!template) return;
     if (!canResubmit(template)) return;
     if (expiryStatus(template).expired) return;
+    if (slotLocked(template)) return;
     const newErrors = {};
     template.fields.forEach(f => {
       if (f.required && !values[f.id]) newErrors[f.id] = "This field is required";
@@ -777,6 +798,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
   const submittedCount = Object.keys(submittedIds).length;
   const expiry = template ? expiryStatus(template) : { expired: false, label: "" };
   const isExpired = expiry.expired && !isSubmitted;
+  const isLocked = template && slotLocked(template) && !isSubmitted;
 
   return (
     <div>
@@ -859,22 +881,27 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
           )}
 
           {allTemplates.length > 1 && (() => {
-            const open = allTemplates.filter(t => canResubmit(t) && !expiryStatus(t).expired);
             const submitted = allTemplates.filter(t => !canResubmit(t));
-            const expired = allTemplates.filter(t => canResubmit(t) && expiryStatus(t).expired);
-            const renderBtn = (t, done, exp) => {
+            const nonSubmitted = allTemplates.filter(t => canResubmit(t));
+            const expired = nonSubmitted.filter(t => expiryStatus(t).expired);
+            const locked = nonSubmitted.filter(t => !expiryStatus(t).expired && slotLocked(t));
+            const open = nonSubmitted.filter(t => !expiryStatus(t).expired && !slotLocked(t));
+            const renderBtn = (t, state) => {
               const sel = selectedId === t.id;
+              const done = state === "done";
+              const exp = state === "expired";
+              const lock = state === "locked";
               return (
               <button key={t.id} onClick={() => { setSelectedId(t.id); setValues(submittedValues[t.id] || loadDraft(t.id) || {}); setErrors({}); setDraftSaved(false); }} style={{
                 padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                border: "1.5px solid " + (done ? "#2d9e2d" : exp ? "#e67e22" : sel ? "#555" : "#E8E8E8"),
-                background: done ? "#2d9e2d18" : exp ? "#e67e2218" : sel ? "#f5f5f5" : "#fff",
-                color: done ? "#2d9e2d" : exp ? "#e67e22" : "#555",
+                border: "1.5px solid " + (done ? "#2d9e2d" : exp ? "#e67e22" : lock ? "#B0B0B0" : sel ? "#555" : "#E8E8E8"),
+                background: done ? "#2d9e2d18" : exp ? "#e67e2218" : lock ? "#F0F0F0" : sel ? "#f5f5f5" : "#fff",
+                color: done ? "#2d9e2d" : exp ? "#e67e22" : lock ? "#888" : "#555",
                 cursor: "pointer", fontFamily: "inherit",
                 boxShadow: sel ? "0 3px 10px rgba(0,0,0,0.18)" : "none",
                 transition: "all 0.15s",
               }}>
-                {done ? "✓ " : exp ? "⏰ " : ""}{t.name}
+                {done ? "✓ " : exp ? "⏰ " : lock ? "🔒 " : ""}{t.name}
                 {t.slotLabel && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.8, fontWeight: 700 }}>@{t.slotLabel}</span>}
                 {done && submittedIds[t.id] && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>
                   {new Date(submittedIds[t.id]).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
@@ -886,19 +913,25 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 {open.length > 0 && (
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.08em", marginBottom: 6 }}>OPEN</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{open.map(t => renderBtn(t, false, false))}</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{open.map(t => renderBtn(t, "open"))}</div>
+                  </div>
+                )}
+                {locked.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: "0.08em", marginBottom: 6 }}>UPCOMING</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{locked.map(t => renderBtn(t, "locked"))}</div>
                   </div>
                 )}
                 {submitted.length > 0 && (
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#2d9e2d", letterSpacing: "0.08em", marginBottom: 6 }}>SUBMITTED</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{submitted.map(t => renderBtn(t, true, false))}</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{submitted.map(t => renderBtn(t, "done"))}</div>
                   </div>
                 )}
                 {expired.length > 0 && (
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#e67e22", letterSpacing: "0.08em", marginBottom: 6 }}>EXPIRED</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{expired.map(t => renderBtn(t, false, true))}</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{expired.map(t => renderBtn(t, "expired"))}</div>
                   </div>
                 )}
               </div>
@@ -906,8 +939,8 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
           })()}
 
           {template ? (
-            <div style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : "#EBEBEB"}`, overflow: "hidden" }}>
-              <div style={{ background: isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : "#111", padding: "18px 20px 16px" }}>
+            <div style={{ background: "#fff", borderRadius: 16, border: `1.5px solid ${isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : isLocked ? "#888" : "#EBEBEB"}`, overflow: "hidden" }}>
+              <div style={{ background: isSubmitted ? "#2d9e2d" : isExpired ? "#e67e22" : isLocked ? "#555" : "#111", padding: "18px 20px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>
                     {recurrenceLabel(template)} · {template.slotLabel || template.time}
@@ -921,6 +954,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{template.name}</div>
                   {isSubmitted && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>✓ {elapsedLabel(submittedIds[template.id])}</span>}
                   {isExpired && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>Expired</span>}
+                  {isLocked && <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>🔒 {slotUnlockLabel(template)}</span>}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
                   <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{template.fields.length} fields</span>
@@ -928,7 +962,7 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 </div>
               </div>
               <ProgressBar fields={template.fields} values={values} />
-              <div style={{ padding: 18, ...(isSubmitted || isExpired ? { pointerEvents: "none", opacity: 0.7 } : {}) }}>
+              <div style={{ padding: 18, ...(isSubmitted || isExpired || isLocked ? { pointerEvents: "none", opacity: 0.7 } : {}) }}>
                 {template.fields.map((field, idx) => (
                   <div key={field.id} style={{ marginBottom: 18, padding: "14px 15px", border: "1.5px solid " + (errors[field.id] ? "#ffcccc" : "#EBEBEB"), borderRadius: 11, background: errors[field.id] ? "#FFFAFA" : "#fff" }}>
                     <label style={{ ...S.label, marginBottom: 8 }}>
@@ -985,6 +1019,10 @@ export default function StaffView({ templates, onSubmit, logs = [], roleName = "
                 ) : isExpired ? (
                   <div style={{ width: "100%", padding: "13px 0", background: "#e67e2218", border: "1.5px solid #e67e2235", borderRadius: 10, color: "#e67e22", fontSize: 14, fontWeight: 700, textAlign: "center", marginTop: 4 }}>
                     Checklist Expired
+                  </div>
+                ) : isLocked ? (
+                  <div style={{ width: "100%", padding: "13px 0", background: "#F5F5F5", border: "1.5px solid #D8D8D8", borderRadius: 10, color: "#555", fontSize: 14, fontWeight: 700, textAlign: "center", marginTop: 4 }}>
+                    🔒 Available at {template.slotLabel} · {slotUnlockLabel(template)}
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
